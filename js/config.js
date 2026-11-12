@@ -1,6 +1,6 @@
 // ============================================================
 //  CONFIGURATION — Régie publicitaire Callo 2027
-//  Site : https://damsmindset.github.io/callo/
+//  Site : https://regiepubcallo.github.io/
 // ============================================================
 window.CALLO_CONFIG = {
   // URL de l'application web Apps Script (se termine par /exec).

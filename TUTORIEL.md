@@ -24,15 +24,13 @@ Parcours complet, avec points de contact et moments de vérité : `docs/Mindmap_
 
 # 2. Étape 1 : mettre le mini-site en ligne (GitHub Pages)
 
-**À savoir sur l'adresse.** Une adresse GitHub Pages n'a pas de `www`. Le brief indique `https://www.regie-publicitaire-callo.github.io`, qui ne fonctionnera pas. L'adresse correcte est `https://regie-publicitaire-callo.github.io`, à condition que le compte GitHub s'appelle exactement `regie-publicitaire-callo`.
+**À savoir sur l'adresse.** Le site est publié depuis un dépôt qui porte le nom de l'organisation suivi de `.github.io` — c'est la seule façon d'obtenir une adresse sans répertoire.
 
-1. Créez un compte GitHub nommé `regie-publicitaire-callo` (ou une organisation de ce nom) sur github.com.
-2. Dans ce compte, créez un dépôt **public** nommé exactement `regie-publicitaire-callo.github.io`.
-3. Cliquez sur **Add file > Upload files** et glissez **tout le contenu** du dossier (pas le dossier lui-même : `index.html` doit se trouver à la racine). Validez avec **Commit changes**.
-4. Allez dans **Settings > Pages**. Sous « Build and deployment », choisissez **Deploy from a branch**, branche **main**, dossier **/ (root)**, puis **Save**.
-5. Attendez 1 à 2 minutes, puis ouvrez `https://regie-publicitaire-callo.github.io`. La page d'accueil doit s'afficher.
-
-*Variante avec votre compte actuel (DamsMindset)* : créez un dépôt public `regie-publicitaire-callo` et activez Pages de la même façon. L'adresse sera `https://damsmindset.github.io/regie-publicitaire-callo/`. Dans ce cas, remplacez cette adresse dans `email/brevo-gabarit.html` (étape 4).
+1. Organisation GitHub : **`regiepubcallo`** (gratuite, compte `dbougreau-supcallo`).
+2. Dépôt **public** nommé exactement **`Regiepubcallo.github.io`**, branche **`gh-pages`**.
+3. Adresse publiée : **https://regiepubcallo.github.io** — c'est cette adresse qui est utilisée dans `email/brevo-gabarit.html`.
+4. GitHub Pages est activé automatiquement pour ce type de dépôt. S'il ne l'est pas : **Settings > Pages**, source *Deploy from a branch*, branche `gh-pages`, dossier `/ (root)`.
+5. Les mises à jour se font par `git push` sur `gh-pages` ; la publication prend 1 à 2 minutes.
 
 *Le fichier `docs/Actualycee_2026.pdf` pèse 12 Mo.* Il passe sur GitHub, mais s'ouvre lentement sur mobile. Vous pouvez le remplacer par une version allégée sous le même nom.
 
