@@ -17,7 +17,7 @@
 <section class="hero"><div>
 <div class="kicker">Espace de dépôt partenaire</div>
 <h1>Déposez votre bon de commande, votre encart et votre logo.</h1>
-<p>Trois fichiers, un envoi. Nos professionnels s'occupent de la mise en page et vous soumettent le BAT.</p>
+<p>Trois fichiers obligatoires, un seul envoi. Vous pouvez y joindre votre BAT signé. Nos professionnels s'occupent de la mise en page et vous soumettent le bon à tirer.</p>
 </div></section>
 <main id="contenu" class="wrap narrow">
 <div id="bloc-form"><form id="form-depot" class="card" novalidate>
@@ -31,6 +31,8 @@
 <input type="file" name="encart" accept=".pdf,.png,.jpg,.jpeg" aria-label="Votre encart"><div id="n-encart" class="hint" role="status"></div></fieldset>
 <fieldset><legend>3 · Votre logo *</legend><p class="hint">HD vectorisé (AI, EPS, SVG ou PDF), sinon image 300 dpi sur fond neutre. Il sera placé sur le kakemono 2027 à égale proportion des partenaires.</p>
 <input type="file" name="logo" accept=".ai,.eps,.svg,.pdf,.png" aria-label="Votre logo"><div id="n-logo" class="hint" role="status"></div></fieldset>
+<fieldset><legend>4 · Votre BAT signé <span style="font-weight:600;color:var(--muted)">(facultatif à ce stade)</span></legend><p class="hint">Si vous nous avez déjà renvoyé le bon à tirer signé, déposez-le ici : il est classé automatiquement dans votre dossier et horodaté. Formats PDF, JPG ou PNG.</p>
+<input type="file" name="bat" accept=".pdf,.jpg,.jpeg,.png" aria-label="BAT signé"><div id="n-bat" class="hint" role="status"></div></fieldset>
 <div id="err" class="error" role="alert"></div>
 <button id="envoyer" class="btn" type="submit">Envoyer mes documents</button>
 </form></div>

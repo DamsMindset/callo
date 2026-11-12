@@ -20,6 +20,16 @@ var CONFIG = {
   SEND_ACK_TO_PARTNER: true,                       // accusé de réception après dépôt
   DRIVE_FOLDER_NAME: 'Régie Callo 2027 - Dépôts partenaires',
   MAX_FILE_MB: 20,
+  // Partage des dossiers de dépôt. Le script s'exécute avec le compte qui le déploie :
+  // les fichiers arrivent donc dans le Drive de d.bougreau@lyceemarcelcallo.org.
+  // Ajouter ici les personnes qui doivent voir les dossiers (lecture seule).
+  // Partage en 2 temps : d.bougreau immédiatement.
+  // i.belaud sera ajouté APRÈS vérification du document par Damien :
+  // SHARE_FOLDER_WITH: ['d.bougreau@lyceemarcelcallo.org', 'i.belaud@lyceemarcelcallo.org'],
+  SHARE_FOLDER_WITH: ['d.bougreau@lyceemarcelcallo.org'],
+  // true = tout le domaine lyceemarcelcallo.org peut consulter le dossier en lecture
+  // (à n'activer que si l'établissement l'autorise).
+  SHARE_WITH_DOMAIN: false,
   TZ: 'Europe/Paris'
 };
 
@@ -29,19 +39,25 @@ var HEADERS = [
   'Date envoi e-mail', 'Date ouverture e-mail', 'Date clic e-mail', 'Date 1re visite site',
   'Date réponse formulaire', 'Intérêt', 'Formats choisis', 'Raison (si non)', 'RGPD opt-in',
   'Date DL plaquette', 'Date DL CGV', 'Date DL bon de commande', 'Variante bon de commande',
-  'Date réception bon de commande', 'Date réception encart', 'Date réception logo', 'Dossier Drive',
+  'Date réception bon de commande', 'Date réception encart', 'Date réception logo',
+  'Date réception BAT signé', 'Date mise sous Drive BC', 'Date mise sous Drive BAT', 'Dossier Drive',
   'Date envoi devis (manuel)', 'Date envoi BAT (manuel)', 'Date validation BAT (manuel)', 'Montant net € (manuel)',
   'Commentaire partenaire', 'Statut', 'Dernière activité', 'Etat e-mail',
   // --- analyse de provenance et d'expérience (remplissage automatique) ---
   'Canal', 'Source', 'Page d\'entrée', 'Referrer', 'Premier contact',
   'Délai clic→réponse (h)', 'Délai réponse→BC (j)', 'Délai BC→documents (j)', 'Délai documents→BAT (j)',
-  'Score engagement'
+  'Score engagement',
+  // --- comportement de visite (remplissage automatique) ---
+  'Connexion (jour/heure)', 'Navigateur', 'Appareil', 'Écran',
+  'Durée de visite (s)', 'Pages vues', 'Dernière page vue', 'Nom dossier Drive',
+  'Fichiers présents dans Drive', 'Dernier contrôle Drive'
 ];
 var DATE_COLS = ['Date envoi e-mail', 'Date ouverture e-mail', 'Date clic e-mail', 'Date 1re visite site',
   'Date réponse formulaire', 'Date DL plaquette', 'Date DL CGV', 'Date DL bon de commande',
   'Date réception bon de commande', 'Date réception encart', 'Date réception logo',
-  'Date envoi devis (manuel)', 'Date envoi BAT (manuel)', 'Date validation BAT (manuel)',
-  'Dernière activité', 'Premier contact'];
+  'Date réception BAT signé', 'Date envoi devis (manuel)', 'Date envoi BAT (manuel)', 'Date validation BAT (manuel)',
+  'Dernière activité', 'Premier contact', 'Connexion (jour/heure)',
+  'Date mise sous Drive BC', 'Date mise sous Drive BAT', 'Dernier contrôle Drive'];
 var SHEET_SUIVI = 'Suivi', SHEET_LOG = 'Journal', SHEET_KPI = 'Tableau de bord', SHEET_PARCOURS = 'Parcours';
 var VERSION = 'v2.0';
 
@@ -87,6 +103,7 @@ function doPost(e) {
       case 'download':    return json_(handleDownload_(body));
       case 'commentaire': return json_(handleCommentaire_(body));
       case 'depot':       return json_(handleDepot_(body));
+      case 'duree':       return json_(handleDuree_(body));
       default:            return json_({ ok: false, error: 'Action inconnue' });
     }
   } catch (err) {
@@ -114,7 +131,11 @@ function provenance_(row, b) {
   if (b.canal || b.source) setIfEmpty_(row, 'Canal', canal_(b.canal || b.source));
   if (b.page) setIfEmpty_(row, 'Page d\'entrée', String(b.page).slice(0, 60));
   if (b.referrer) setIfEmpty_(row, 'Referrer', String(b.referrer).slice(0, 120));
+  if (b.navigateur) setIfEmpty_(row, 'Navigateur', String(b.navigateur).slice(0, 40));
+  if (b.appareil) setIfEmpty_(row, 'Appareil', String(b.appareil).slice(0, 20));
+  if (b.ecran) setIfEmpty_(row, 'Écran', String(b.ecran).slice(0, 20));
   setIfEmpty_(row, 'Premier contact', new Date());
+  setIfEmpty_(row, 'Connexion (jour/heure)', new Date());
 }
 
 // ===================== GESTIONNAIRES =====================
@@ -183,6 +204,24 @@ function handleDownload_(b) {
   return { ok: true };
 }
 
+/** Temps passé sur le site : cumul des secondes et nombre de pages vues. */
+function handleDuree_(b) {
+  var email = clean_(b.email);
+  var sec = Math.max(0, Math.min(7200, parseInt(b.seconds, 10) || 0));
+  var pages = Math.max(0, Math.min(99, parseInt(b.pages, 10) || 0));
+  if (!email) { log_('DUREE', '(anonyme)', sec + ' s · ' + (b.page || '')); return { ok: true }; }
+  var row = upsert_(email);
+  provenance_(row, b);
+  var prev = parseFloat(get_(row, 'Durée de visite (s)')) || 0;
+  set_(row, 'Durée de visite (s)', Math.round((prev + sec) * 10) / 10);
+  var seen = parseInt(get_(row, 'Pages vues'), 10) || 0;
+  if (pages > seen) set_(row, 'Pages vues', pages);
+  if (b.page) set_(row, 'Dernière page vue', String(b.page).slice(0, 60));
+  log_('DUREE', email, sec + ' s · ' + (b.page || '') + ' · ' + pages + ' page(s)');
+  finish_(row);
+  return { ok: true };
+}
+
 function handleCommentaire_(b) {
   var email = clean_(b.email);
   log_('COMMENTAIRE', email || '(anonyme)', String(b.message || '').slice(0, 500));
@@ -206,20 +245,26 @@ function handleDepot_(b) {
 
   var entreprise = String(b.entreprise || 'Sans-nom').trim();
   var folder = companyFolder_(entreprise);
-  var labels = { bon: 'bon-de-commande', encart: 'encart', logo: 'logo' };
-  var cols = { bon: 'Date réception bon de commande', encart: 'Date réception encart', logo: 'Date réception logo' };
+  var labels = { bon: 'bon-de-commande', encart: 'encart', logo: 'logo', bat: 'bat-signe' };
+  var cols = { bon: 'Date réception bon de commande', encart: 'Date réception encart', logo: 'Date réception logo', bat: 'Date réception BAT signé' };
   var row = upsert_(email);
   provenance_(row, b);
   set_(row, 'Entreprise', get_(row, 'Entreprise') || entreprise);
   var stamp = Utilities.formatDate(new Date(), CONFIG.TZ, 'yyyyMMdd-HHmm');
+  var maintenant = new Date();
   files.forEach(function (f) {
     var name = safeName_(f.name || 'fichier');
     var blob = Utilities.newBlob(Utilities.base64Decode(f.data || ''), f.mime || 'application/octet-stream',
       labels[f.field] + '_' + safeName_(entreprise) + '_' + stamp + '_' + name);
     folder.createFile(blob);
-    if (cols[f.field]) set_(row, cols[f.field], new Date());
+    if (cols[f.field]) set_(row, cols[f.field], maintenant);
+    // date de mise sous Drive, par document
+    if (f.field === 'bon') set_(row, 'Date mise sous Drive BC', maintenant);
+    if (f.field === 'bat') set_(row, 'Date mise sous Drive BAT', maintenant);
   });
   set_(row, 'Dossier Drive', folder.getUrl());
+  set_(row, 'Nom dossier Drive', folder.getName());
+  controlerDossier_(row, folder);
   log_('DEPOT', email, files.length + ' fichier(s) — ' + folder.getUrl());
   finish_(row);
   notify_('Dépôt de documents : ' + entreprise, 'Fichiers reçus : ' + files.map(function (f) { return f.field + ' = ' + f.name; }).join(', ') +
@@ -320,6 +365,8 @@ function finish_(row) {
 }
 
 function computeStatus_(row) {
+  if (has_(row, 'Date validation BAT (manuel)') && has_(row, 'Date réception BAT signé')) return '10 · BAT signé reçu — dossier bouclé';
+  if (has_(row, 'Date réception BAT signé')) return '9 · BAT signé reçu';
   if (has_(row, 'Date validation BAT (manuel)')) return '9 · BAT validé';
   if (has_(row, 'Date envoi BAT (manuel)')) return '8 · BAT envoyé, à valider';
   if (has_(row, 'Date réception encart') && has_(row, 'Date réception logo') && has_(row, 'Date réception bon de commande')) return '7 · Documents reçus, BAT à produire';
@@ -353,12 +400,106 @@ function log_(type, email, detail) {
   sh.appendRow([new Date(), type, email, String(detail || '').slice(0, 1000)]);
 }
 
+/**
+ * Vérifie ce qui est réellement présent dans le dossier Drive du partenaire,
+ * écrit le résumé dans la feuille et renseigne les dates de mise sous Drive
+ * à partir de la date de création réelle des fichiers.
+ */
+function controlerDossier_(row, folder) {
+  try {
+    var f = folder || null;
+    if (!f) {
+      var nom = get_(row, 'Nom dossier Drive') || safeName_(get_(row, 'Entreprise') || '');
+      if (!nom) return '';
+      var racines = DriveApp.getFoldersByName(CONFIG.DRIVE_FOLDER_NAME);
+      if (!racines.hasNext()) return '';
+      var root = racines.next();
+      var sous = root.getFoldersByName(nom);
+      if (!sous.hasNext()) { set_(row, 'Fichiers présents dans Drive', 'dossier introuvable'); return ''; }
+      f = sous.next();
+    }
+    var trouve = { bon: false, encart: false, logo: false, bat: false };
+    var dates = { bon: null, bat: null };
+    var it = f.getFiles();
+    while (it.hasNext()) {
+      var file = it.next();
+      var n = String(file.getName()).toLowerCase();
+      Object.keys(trouve).forEach(function (k) {
+        var prefixe = { bon: 'bon-de-commande_', encart: 'encart_', logo: 'logo_', bat: 'bat-signe_' }[k];
+        if (n.indexOf(prefixe) === 0) {
+          trouve[k] = true;
+          if ((k === 'bon' || k === 'bat') && !dates[k]) dates[k] = file.getDateCreated();
+        }
+      });
+    }
+    var resume = 'BC ' + (trouve.bon ? '✓' : '✗') +
+      ' · Encart ' + (trouve.encart ? '✓' : '✗') +
+      ' · Logo ' + (trouve.logo ? '✓' : '✗') +
+      ' · BAT ' + (trouve.bat ? '✓' : '✗');
+    set_(row, 'Fichiers présents dans Drive', resume);
+    set_(row, 'Dernier contrôle Drive', new Date());
+    if (dates.bon) set_(row, 'Date mise sous Drive BC', dates.bon);
+    if (dates.bat) set_(row, 'Date mise sous Drive BAT', dates.bat);
+    if (trouve.bon && !has_(row, 'Date réception bon de commande')) set_(row, 'Date réception bon de commande', dates.bon || new Date());
+    if (trouve.bat && !has_(row, 'Date réception BAT signé')) set_(row, 'Date réception BAT signé', dates.bat || new Date());
+    return resume;
+  } catch (e) {
+    log_('ERREUR', '', 'Contrôle Drive : ' + e);
+    return '';
+  }
+}
+
+/** Balaye tous les contacts et met à jour la présence réelle des fichiers. */
+function controlerDrive() {
+  var sh = sheet_(SHEET_SUIVI), n = sh.getLastRow(), fait = 0, avecBat = 0, avecBc = 0;
+  for (var r = 2; r <= n; r++) {
+    if (!has_(r, 'E-mail')) continue;
+    var resume = controlerDossier_(r, null);
+    if (resume) {
+      fait++;
+      if (resume.indexOf('BAT ✓') >= 0) avecBat++;
+      if (resume.indexOf('BC ✓') >= 0) avecBc++;
+    }
+    set_(r, 'Statut', computeStatus_(r));
+  }
+  SpreadsheetApp.getActiveSpreadsheet().toast(fait + ' dossier(s) contrôlé(s) — ' + avecBc + ' avec bon de commande, ' + avecBat + ' avec BAT signé.', 'Contrôle Drive', 8);
+}
+
+/** Applique le partage une seule fois par dossier (marqueur dans la description). */
+function shareOnce_(folder) {
+  try {
+    if (String(folder.getDescription() || '').indexOf('callo-shared') === 0) return;
+    (CONFIG.SHARE_FOLDER_WITH || []).forEach(function (mail) {
+      try { folder.addViewer(mail); } catch (e) { log_('ERREUR', '', 'Partage ' + mail + ' : ' + e); }
+    });
+    if (CONFIG.SHARE_WITH_DOMAIN) {
+      try { folder.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); }
+      catch (e) { log_('ERREUR', '', 'Partage domaine : ' + e); }
+    }
+    folder.setDescription('callo-shared ' + Utilities.formatDate(new Date(), CONFIG.TZ, 'dd/MM/yyyy HH:mm'));
+  } catch (e) {
+    log_('ERREUR', '', 'Partage dossier : ' + e);
+  }
+}
+
 function companyFolder_(entreprise) {
   var roots = DriveApp.getFoldersByName(CONFIG.DRIVE_FOLDER_NAME);
   var root = roots.hasNext() ? roots.next() : DriveApp.createFolder(CONFIG.DRIVE_FOLDER_NAME);
+  shareOnce_(root);
   var name = safeName_(entreprise);
   var subs = root.getFoldersByName(name);
-  return subs.hasNext() ? subs.next() : root.createFolder(name);
+  var folder = subs.hasNext() ? subs.next() : root.createFolder(name);
+  shareOnce_(folder);
+  return folder;
+}
+
+/** Crée le dossier racine et applique le partage, sans attendre un dépôt. */
+function preparerDossiers() {
+  var roots = DriveApp.getFoldersByName(CONFIG.DRIVE_FOLDER_NAME);
+  var root = roots.hasNext() ? roots.next() : DriveApp.createFolder(CONFIG.DRIVE_FOLDER_NAME);
+  shareOnce_(root);
+  SpreadsheetApp.getActiveSpreadsheet().toast('Dossier Drive prêt et partagé : ' + root.getUrl());
+  return root.getUrl();
 }
 
 function notify_(subject, body) {
@@ -430,7 +571,14 @@ function buildDashboard_() {
     ['Délai moyen réponse → BC (j)', '=IFERROR(AVERAGE(' + colRange_('Délai réponse→BC (j)') + '),0)', ''],
     ['Délai moyen réception → BAT (j)', '=IFERROR(AVERAGE(' + colRange_('Délai documents→BAT (j)') + '),0)', ''],
     ['Réservation possible jusqu\'au', '01/12/2026', ''],
-    ['Parution Actualycée', '18/12/2026', '']
+    ['Parution Actualycée', '18/12/2026', ''],
+    ['Durée moyenne de visite (s)', '=IFERROR(ROUND(AVERAGE(' + colRange_('Durée de visite (s)') + '),0),0)', ''],
+    ['Visiteurs sur mobile', '=COUNTIF(' + colRange_('Appareil') + ',"Mobile")', '=IFERROR(B28/B3,0)'],
+    ['Visiteurs sur ordinateur', '=COUNTIF(' + colRange_('Appareil') + ',"Ordinateur")', '=IFERROR(B29/B3,0)'],
+    ['Connexions enregistrées', '=COUNTA(' + colRange_('Connexion (jour/heure)') + ')', '=IFERROR(B30/B3,0)'],
+    ['BAT signés reçus', '=COUNTA(' + colRange_('Date réception BAT signé') + ')', '=IFERROR(B31/B16,0)'],
+    ['Dossiers avec BC dans Drive', '=COUNTIF(' + colRange_('Fichiers présents dans Drive') + ',"*BC ✓*")', '=IFERROR(B32/B3,0)'],
+    ['Dossiers avec BAT dans Drive', '=COUNTIF(' + colRange_('Fichiers présents dans Drive') + ',"*BAT ✓*")', '=IFERROR(B33/B3,0)']
   ];
   d.getRange(1, 1, rows.length, 3).setFormulas(rows);
   d.getRange('A1').setFontSize(14).setFontWeight('bold').setFontColor('#355D8D');
@@ -439,6 +587,9 @@ function buildDashboard_() {
   d.getRange('C7:C17').setNumberFormat('0.0%');  // conversions
   d.getRange('B19:B20').setNumberFormat('# ##0 "€"');
   d.getRange('B22:B24').setNumberFormat('0.0');
+  d.getRange('B27').setNumberFormat('0');
+  d.getRange('C28:C30').setNumberFormat('0.0%');
+  d.getRange('C31:C33').setNumberFormat('0.0%');
   d.setColumnWidth(1, 330); d.setColumnWidth(2, 130); d.setColumnWidth(3, 110);
   d.getRange('A3:C3').setFontWeight('bold');
   d.getRange('A26:C27').setFontColor('#4a5b70');
@@ -466,16 +617,17 @@ function buildParcours_() {
     ['7 · Bon de commande téléchargé', '=COUNTA(' + colRange_('Date DL bon de commande') + ')', '=IFERROR(B9/B8,0)', ''],
     ['8 · Bon de commande reçu', '=COUNTA(' + colRange_('Date réception bon de commande') + ')', '=IFERROR(B10/B9,0)', 'Écart téléchargé/reçu = frein de signature'],
     ['9 · Dossier complet', '=COUNTIFS(' + colRange_('Date réception bon de commande') + ',"<>",' + colRange_('Date réception encart') + ',"<>",' + colRange_('Date réception logo') + ',"<>")', '=IFERROR(B11/B10,0)', 'BC + encart + logo'],
-    ['10 · BAT validé', '=COUNTA(' + colRange_('Date validation BAT (manuel)') + ')', '=IFERROR(B12/B11,0)', 'Fin du parcours partenaire']
+    ['10 · BAT validé', '=COUNTA(' + colRange_('Date validation BAT (manuel)') + ')', '=IFERROR(B12/B11,0)', 'Accord donné sur le bon à tirer'],
+    ['11 · BAT signé reçu', '=COUNTA(' + colRange_('Date réception BAT signé') + ')', '=IFERROR(B13/B12,0)', 'Document signé archivé dans le Drive du partenaire']
   ];
   p.getRange(1, 1, funnel.length, 4).setFormulas(funnel);
   p.getRange('A1').setFontSize(14).setFontWeight('bold').setFontColor('#355D8D');
   p.getRange('A2:D2').setFontWeight('bold').setBackground('#355D8D').setFontColor('#ffffff');
-  p.getRange('C3:C13').setNumberFormat('0.0%');
-  p.getRange('A3:A13').setFontWeight('bold');
+  p.getRange('C3:C14').setNumberFormat('0.0%');
+  p.getRange('A3:A14').setFontWeight('bold');
 
   // --- 2. Provenance ---
-  var r0 = 15;
+  var r0 = 16;
   p.getRange(r0, 1, 1, 6).setValues([['PROVENANCE DES CONTACTS', '', '', '', '', '']]);
   p.getRange(r0, 1, 1, 6).setFontWeight('bold').setFontColor('#D4111F');
   p.getRange(r0 + 1, 1, 1, 6).setValues([['Canal', 'Contacts', 'Réponses', 'Taux de réponse', 'dont Oui', 'CA net (€)']]);
@@ -543,9 +695,9 @@ function buildParcours_() {
   var r2 = r1 + 2 + dl.length + 2;
   var fretes = [
     ['POINTS DE FRICTION À SURVEILLER', '', ''],
-    ['Étape la plus faible', '=INDEX(A4:A13,MATCH(MIN(C4:C13),C4:C13,0))', ''],
-    ['Taux de cette étape', '=MIN(C4:C13)', ''],
-    ['Contacts bloqués à cette étape', '=INDEX(B4:B13,MATCH(MIN(C4:C13),C4:C13,0))-INDEX(B3:B12,MATCH(MIN(C4:C13),C4:C13,0))', ''],
+    ['Étape la plus faible', '=INDEX(A4:A14,MATCH(MIN(C4:C14),C4:C14,0))', ''],
+    ['Taux de cette étape', '=MIN(C4:C14)', ''],
+    ['Contacts bloqués à cette étape', '=INDEX(B4:B14,MATCH(MIN(C4:C14),C4:C14,0))-INDEX(B3:B13,MATCH(MIN(C4:C14),C4:C14,0))', ''],
     ['Réponses « Non »', '=COUNTIF(' + colRange_('Intérêt') + ',"Non")', ''],
     ['Contacts sans aucune activité', '=COUNTIFS(' + colRange_('Date envoi e-mail') + ',"",' + colRange_('Date 1re visite site') + ',"")', '']
   ];
@@ -553,6 +705,33 @@ function buildParcours_() {
   p.getRange(r2, 1, 1, 3).setFontWeight('bold').setFontColor('#D4111F');
   p.getRange(r2 + 3, 2).setNumberFormat('0.0%');
   p.getRange(r2 + 6, 1, 1, 3).setFontColor('#4a5b70');
+
+  // --- 5. Appareils et navigateurs ---
+  var r3 = r2 + 8;
+  p.getRange(r3, 1, 1, 3).setValues([['APPAREILS ET NAVIGATEURS', '', '']]);
+  p.getRange(r3, 1, 1, 3).setFontWeight('bold').setFontColor('#D4111F');
+  p.getRange(r3 + 1, 1, 1, 3).setValues([['Catégorie', 'Contacts', '% des contacts']]);
+  p.getRange(r3 + 1, 1, 1, 3).setFontWeight('bold').setBackground('#355D8D').setFontColor('#ffffff');
+  var app = [['Mobile', 'Mobile'], ['Ordinateur', 'Ordinateur'], ['Tablette', 'Tablette']];
+  var appRows = [];
+  app.forEach(function (a, i) {
+    var r = r3 + 2 + i;
+    appRows.push([a[0], '=COUNTIF(' + colRange_('Appareil') + ',$A' + r + ')', '=IFERROR(B' + r + '/$B$3,0)']);
+  });
+  p.getRange(r3 + 2, 1, appRows.length, 3).setFormulas(appRows);
+  p.getRange(r3 + 2, 3, appRows.length, 1).setNumberFormat('0.0%');
+
+  var navs = ['Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Samsung', 'Autre'];
+  var r4 = r3 + 2 + appRows.length + 1;
+  p.getRange(r4, 1, 1, 3).setValues([['Navigateur', 'Contacts', '% des contacts']]);
+  p.getRange(r4, 1, 1, 3).setFontWeight('bold').setBackground('#355D8D').setFontColor('#ffffff');
+  var navRows = [];
+  navs.forEach(function (n, i) {
+    var r = r4 + 1 + i;
+    navRows.push([n, '=COUNTIF(' + colRange_('Navigateur') + ',"*' + n + '*")', '=IFERROR(B' + r + '/$B$3,0)']);
+  });
+  p.getRange(r4 + 1, 1, navRows.length, 3).setFormulas(navRows);
+  p.getRange(r4 + 1, 3, navRows.length, 1).setNumberFormat('0.0%');
 
   p.setColumnWidth(1, 330); p.setColumnWidth(2, 110); p.setColumnWidth(3, 220); p.setColumnWidth(4, 300);
   p.getRange('E1').setValue('Comment lire cet onglet\n\n1. L\'entonnoir montre où les partenaires s\'arrêtent.\n2. La provenance compare les canaux : un canal qui amène des visites mais pas de réponses doit être réécrit.\n3. Les délais mesurent la promesse « 3 jours ouvrés pour le BAT ». Au-delà, le partenaire décroche.\n4. Les points de friction sont recalculés à chaque ouverture du fichier.');
@@ -565,6 +744,8 @@ function onOpen() {
     .addItem('Initialiser / réparer les feuilles', 'setup')
     .addItem('Recalculer tous les statuts et délais', 'recomputeAll')
     .addItem('Recalculer le parcours et le tableau de bord', 'rebuildReports')
+    .addItem('Préparer et partager le dossier Drive', 'preparerDossiers')
+    .addItem('Contrôler les fichiers réellement présents dans Drive', 'controlerDrive')
     .addToUi();
 }
 

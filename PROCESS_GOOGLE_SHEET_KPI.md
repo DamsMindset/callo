@@ -12,7 +12,7 @@ Temps réel : **25 à 35 minutes**, une seule fois. Compte Google de Damien.
 
 | Onglet | Rôle | Remplissage |
 |---|---|---|
-| **Suivi** | 1 ligne par contact, 41 colonnes : coordonnées, jalons datés, provenance, délais, score, statut | automatique (site + Brevo), sauf les 4 colonnes « (manuel) » |
+| **Suivi** | 1 ligne par contact, 50 colonnes : coordonnées, jalons datés, provenance, délais, score, statut | automatique (site + Brevo), sauf les 4 colonnes « (manuel) » |
 | **Journal** | chaque événement horodaté (visite, réponse, clic, dépôt, erreur) | automatique |
 | **Tableau de bord** | volumes, taux d'ouverture / clic / conversion, CA, panier moyen, délais moyens | formules |
 | **Parcours** | entonnoir en 10 étapes, **provenance par canal**, délais mesurés, points de friction | formules |
@@ -29,6 +29,23 @@ Temps réel : **25 à 35 minutes**, une seule fois. Compte Google de Damien.
 - **Score engagement** (0–100) — ouverture 10, clic 15, visite 10, réponse 25, BC téléchargé 10,
   BC reçu 15, dossier complet 10, BAT validé 5.
 - **Etat e-mail** — rebond, blocage, désinscription (jamais écrasé par le statut commercial).
+
+### Comportement de visite (mesuré dans le navigateur du partenaire)
+
+- **Connexion (jour/heure)** — date et heure exactes de la première connexion.
+- **Navigateur** — Chrome, Safari, Firefox, Edge, Opera, Samsung (avec le numéro de version).
+- **Appareil** — Mobile, Tablette ou Ordinateur.
+- **Écran** — résolution (`390x844` par exemple).
+- **Durée de visite (s)** — temps réellement passé, onglet actif. Le compteur **s'arrête
+  quand l'onglet passe en arrière-plan** : on mesure l'attention, pas la fenêtre ouverte.
+  Envoi toutes les 45 s et à la fermeture, cumul côté serveur, donc pas de double comptage.
+- **Pages vues** — nombre de pages visitées dans la session.
+- **Dernière page vue** — là où le partenaire s'est arrêté : c'est le signal de friction le plus utile.
+- **Nom dossier Drive** — nom du dossier créé pour l'entreprise, qui reçoit ses fichiers.
+
+> Confidentialité : ces mesures sont **agrégées sur le contact** (pas de cookie publicitaire,
+> pas de revente, pas de traçage hors du site). Elles servent uniquement au suivi de la
+> campagne interne. Mention à ajouter au registre RGPD de l'établissement.
 
 ---
 
@@ -117,6 +134,66 @@ URL_DU_SCRIPT/exec?k=callo2027-nQ7xW2
 | Déposer BC + encart + logo | 3 dates de réception, lien **Dossier Drive**, accusé de réception reçu |
 | Écrire un commentaire | *Commentaire partenaire* horodaté |
 | Onglet **Parcours** | entonnoir à jour, ligne *Emailing — envoi principal* avec 1 contact |
+| Rester 30 s sur une page puis fermer l'onglet | *Durée de visite* > 0, *Navigateur* et *Appareil* renseignés |
+| Déposer les 3 fichiers | dossier Drive **au nom de l'entreprise**, 3 dates de réception sur la même ligne |
+
+## Étape 7 bis — Dépôts, BAT et partage Google Drive
+
+**Où arrivent les fichiers.** Le script s'exécute avec le compte qui le déploie : les fichiers
+atterrissent donc dans le Drive de **d.bougreau@lyceemarcelcallo.org**, dans le dossier
+`Régie Callo 2027 - Dépôts partenaires`, avec **un sous-dossier par entreprise**.
+
+Nommage automatique : `encart_Entreprise_20261201-1430_fichier.pdf`.
+Vous obtenez donc, pour chaque partenaire, un dossier qui contient son bon de commande signé,
+son encart, son logo et — s'il l'a renvoyé — **son BAT signé**.
+
+**Les 4 types de fichiers acceptés**
+
+| Champ | Obligatoire | Formats | Nom dans le dossier |
+|---|---|---|---|
+| Bon de commande signé | oui | PDF | `bon-de-commande_…` |
+| Encart | oui | PDF, PNG, JPG | `encart_…` |
+| Logo | oui | AI, EPS, SVG, PDF, PNG | `logo_…` |
+| BAT signé | non | PDF, JPG, PNG | `bat-signe_…` |
+
+**Partage du Drive.** Ouvrez le menu **Régie Callo → Préparer et partager le dossier Drive**.
+Le dossier racine et chaque dossier d'entreprise sont partagés en **lecture seule** avec les
+personnes listées dans le script :
+
+```js
+SHARE_FOLDER_WITH: ['d.bougreau@lyceemarcelcallo.org', 'i.belaud@lyceemarcelcallo.org'],
+SHARE_WITH_DOMAIN: false,   // true = tout le domaine lyceemarcelcallo.org en lecture
+```
+
+- Le partage n'est appliqué **qu'une fois par dossier** (marqueur dans la description du
+  dossier), donc pas de notifications répétées.
+- Le lien direct vers le dossier du partenaire est écrit dans la colonne **Dossier Drive**, et
+  son nom dans **Nom dossier Drive**.
+- Avec `SHARE_WITH_DOMAIN: true`, tout le domaine voit les dossiers : à n'activer que si
+  l'établissement l'autorise, car les dossiers contiennent des documents commerciaux.
+
+**Suivi du BAT dans la feuille**
+
+| Événement | Colonne remplie | Statut |
+|---|---|---|
+| BAT envoyé au partenaire | *Date envoi BAT (manuel)* | 8 · BAT envoyé, à valider |
+| Partenaire renvoie le BAT signé (dépôt) | *Date réception BAT signé* + *Date mise sous Drive BAT* | 9 · BAT signé reçu |
+| Validation notée à la main | *Date validation BAT (manuel)* | 10 · BAT signé reçu — dossier bouclé |
+
+L'onglet **Parcours** ajoute l'étape **11 · BAT signé reçu**, et le tableau de bord les lignes
+*BAT signés reçus*, *Dossiers avec BC dans Drive* et *Dossiers avec BAT dans Drive*.
+
+**Preuve que le fichier est bien dans Drive.** Deux colonnes dédiées :
+
+- **Date mise sous Drive BC** et **Date mise sous Drive BAT** — écrites à l'instant du dépôt,
+  puis corrigées avec la **date de création réelle du fichier** au contrôle suivant.
+- **Fichiers présents dans Drive** — résumé `BC ✓ · Encart ✓ · Logo ✓ · BAT ✓`, et
+  **Dernier contrôle Drive** — horodatage de la dernière vérification.
+
+Menu **Régie Callo → Contrôler les fichiers réellement présents dans Drive** : balaye tous les
+contacts, ouvre chaque dossier d'entreprise, vérifie la présence réelle des quatre fichiers et
+met à jour les dates. À lancer une fois par jour pendant la période de collecte : c'est la
+garantie qu'une ligne du tableur correspond à un document réellement stocké.
 
 ## Étape 8 — Après toute modification du script
 

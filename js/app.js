@@ -31,6 +31,30 @@
   function save(o) { try { sessionStorage.setItem(KEY, JSON.stringify(Object.assign(load(), o))); } catch (e) {} }
   function isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
 
+  // ---------- Empreinte de visite (navigateur, appareil, écran) ----------
+  function navigateur() {
+    var ua = navigator.userAgent || '';
+    var v = (ua.match(/(Edg|OPR|Chrome|Firefox|Version|SamsungBrowser)\/([0-9]+)/) || [])[2] || '';
+    if (/Edg\//.test(ua)) return 'Edge ' + v;
+    if (/OPR\/|Opera/.test(ua)) return 'Opera ' + v;
+    if (/SamsungBrowser/.test(ua)) return 'Samsung ' + v;
+    if (/Firefox\//.test(ua)) return 'Firefox ' + v;
+    if (/Chrome\//.test(ua)) return 'Chrome ' + v;
+    if (/Safari\//.test(ua)) return 'Safari ' + v;
+    return 'Autre';
+  }
+  function appareil() {
+    var ua = navigator.userAgent || '';
+    if (/iPad|Tablet/i.test(ua)) return 'Tablette';
+    if (/Mobi|Android|iPhone|iPod/i.test(ua)) return 'Mobile';
+    return 'Ordinateur';
+  }
+  var UA = {
+    navigateur: navigateur(),
+    appareil: appareil(),
+    ecran: (window.screen ? screen.width + 'x' + screen.height : '')
+  };
+
   function post(payload, opts) {
     payload.token = CFG.TOKEN;
     var ctx = load();
@@ -38,6 +62,9 @@
     if (!payload.source) payload.source = ctx.c || 'direct';
     if (!payload.page) payload.page = ctx.page || '';
     if (!payload.referrer) payload.referrer = ctx.referrer || '';
+    if (!payload.navigateur) payload.navigateur = UA.navigateur;
+    if (!payload.appareil) payload.appareil = UA.appareil;
+    if (!payload.ecran) payload.ecran = UA.ecran;
     if (!payload.email && ctx.e) payload.email = ctx.e;
     if (!CFG.APPS_SCRIPT_URL) {
       if (window.console) console.warn('[Callo] Mode démonstration : aucun envoi (APPS_SCRIPT_URL vide).', payload.action);
@@ -176,8 +203,10 @@
     var c = load();
     if (c.entreprise) f.entreprise.value = c.entreprise;
     if (c.mail || c.e) f.mail.value = c.mail || c.e;
-    var EXT = { bon: ['pdf'], encart: ['pdf', 'png', 'jpg', 'jpeg'], logo: ['ai', 'eps', 'svg', 'pdf', 'png'] };
-    ['bon', 'encart', 'logo'].forEach(function (k) {
+    var EXT = { bon: ['pdf'], encart: ['pdf', 'png', 'jpg', 'jpeg'], logo: ['ai', 'eps', 'svg', 'pdf', 'png'], bat: ['pdf', 'jpg', 'jpeg', 'png'] };
+    var CHAMPS = ['bon', 'encart', 'logo', 'bat'];
+    CHAMPS.forEach(function (k) {
+      if (!f[k]) return;
       f[k].addEventListener('change', function () {
         var n = $('#n-' + k), file = f[k].files[0];
         n.textContent = file ? 'Fichier choisi : ' + file.name + ' (' + (file.size / 1048576).toFixed(1) + ' Mo)' : '';
@@ -189,12 +218,18 @@
       if (!f.entreprise.value.trim()) { err.textContent = 'Indiquez le nom de votre entreprise.'; f.entreprise.focus(); return; }
       if (!isEmail(f.mail.value.trim())) { err.textContent = 'Indiquez votre adresse e-mail (pour recevoir le BAT).'; f.mail.focus(); return; }
       var files = [], total = 0, k, file, ext;
-      for (var i = 0; i < 3; i++) {
-        k = ['bon', 'encart', 'logo'][i]; file = f[k].files[0];
+      var OBLIG = ['bon', 'encart', 'logo'];
+      for (var i = 0; i < OBLIG.length; i++) {
+        k = OBLIG[i]; file = f[k].files[0];
         if (!file) { err.textContent = 'Il manque un fichier : ' + { bon: 'le bon de commande signé', encart: 'votre encart', logo: 'votre logo' }[k] + '.'; return; }
         ext = (file.name.split('.').pop() || '').toLowerCase();
         if (EXT[k].indexOf(ext) < 0) { err.textContent = 'Format non accepté pour ' + k + ' (' + EXT[k].join(', ').toUpperCase() + ').'; return; }
         total += file.size; files.push({ k: k, file: file });
+      }
+      if (f.bat && f.bat.files[0]) {
+        var bat = f.bat.files[0], bext = (bat.name.split('.').pop() || '').toLowerCase();
+        if (EXT.bat.indexOf(bext) < 0) { err.textContent = 'Format non accepté pour le BAT signé (PDF, JPG ou PNG).'; return; }
+        total += bat.size; files.push({ k: 'bat', file: bat });
       }
       if (total > (CFG.MAX_UPLOAD_MB || 20) * 1048576) { err.textContent = 'Fichiers trop volumineux (' + (total / 1048576).toFixed(1) + ' Mo). Maximum : ' + (CFG.MAX_UPLOAD_MB || 20) + ' Mo au total.'; return; }
       btn.disabled = true; btn.textContent = 'Envoi en cours, merci de patienter…';
@@ -213,5 +248,34 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', function () { initForm(); initMerci(); initDepot(); });
+  // ---------- Temps passé sur le site et pages vues ----------
+  function initMesure() {
+    if (window.__calloMesureFaite) return;   // un seul compteur par page
+    window.__calloMesureFaite = true;
+    var PAGE = location.pathname.split('/').pop() || 'index.html';
+    var vues = [];
+    try { vues = JSON.parse(sessionStorage.getItem(KEY + '_pages') || '[]'); } catch (e) { vues = []; }
+    if (vues[vues.length - 1] !== PAGE) vues.push(PAGE);
+    try { sessionStorage.setItem(KEY + '_pages', JSON.stringify(vues)); } catch (e) {}
+
+    var t0 = Date.now(), actif = 0, dernier = Date.now();
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) { actif += Date.now() - dernier; }
+      else { dernier = Date.now(); }
+    });
+    function envoyer() {
+      if (!document.hidden) { actif += Date.now() - dernier; }
+      dernier = Date.now();
+      var s = Math.round(actif / 1000);
+      if (s < 2) return;
+      actif = 0; // remis à zéro : le cumul est fait côté serveur, pas de double comptage
+      post({ action: 'duree', seconds: s, pages: vues.length, page: PAGE }, { beacon: true });
+    }
+    window.addEventListener('pagehide', envoyer);
+    document.addEventListener('visibilitychange', function () { if (document.hidden) envoyer(); });
+    // envoi intermédiaire au bout de 45 s pour ne rien perdre si l'onglet reste ouvert
+    setTimeout(envoyer, 45000);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () { initMesure(); initForm(); initMerci(); initDepot(); });
 })();
