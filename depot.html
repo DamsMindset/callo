@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Espace de dépôt — bon de commande, encart et logo</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="depot">
+<a class="skip" href="#contenu">Aller au contenu</a>
+<header class="top">
+<div class="brand"><img src="assets/logo.png" alt="Marcel Callo"><div>Marcel Callo<small>LYCÉE PRIVÉ SOUS CONTRAT &amp; PÔLE SUP' · REDON</small></div></div>
+<div class="season">RÉGIE PUBLICITAIRE<br>SAISON 2027</div>
+</header>
+
+<section class="hero"><div>
+<div class="kicker">Espace de dépôt partenaire</div>
+<h1>Déposez votre bon de commande, votre encart et votre logo.</h1>
+<p>Trois fichiers, un envoi. Nos professionnels s'occupent de la mise en page et vous soumettent le BAT.</p>
+</div></section>
+<main id="contenu" class="wrap narrow">
+<div id="bloc-form"><form id="form-depot" class="card" novalidate>
+<div class="grid2">
+<label class="f">Nom de l'entreprise *<input type="text" name="entreprise" autocomplete="organization" required></label>
+<label class="f">E-mail (pour recevoir le BAT) *<input type="email" name="mail" autocomplete="email" required></label>
+</div>
+<fieldset><legend>1 · Bon de commande signé *</legend><p class="hint">Annexe 1 complétée et signée. Format PDF.</p>
+<input type="file" name="bon" accept=".pdf" aria-label="Bon de commande signé"><div id="n-bon" class="hint" role="status"></div></fieldset>
+<fieldset><legend>2 · Votre encart *</legend><p class="hint">PDF/X-1a ou PDF/X-4, CMJN, 300 dpi, fonds perdus 3 mm, marge de sécurité 5 mm. Nommage : Actualycee_Entreprise_Format_V1.</p>
+<input type="file" name="encart" accept=".pdf,.png,.jpg,.jpeg" aria-label="Votre encart"><div id="n-encart" class="hint" role="status"></div></fieldset>
+<fieldset><legend>3 · Votre logo *</legend><p class="hint">HD vectorisé (AI, EPS, SVG ou PDF), sinon image 300 dpi sur fond neutre. Il sera placé sur le kakemono 2027 à égale proportion des partenaires.</p>
+<input type="file" name="logo" accept=".ai,.eps,.svg,.pdf,.png" aria-label="Votre logo"><div id="n-logo" class="hint" role="status"></div></fieldset>
+<div id="err" class="error" role="alert"></div>
+<button id="envoyer" class="btn" type="submit">Envoyer mes documents</button>
+</form></div>
+<section id="bloc-merci" class="card success" hidden role="status">
+<h2 style="margin:0">Merci de votre envoi !</h2>
+<p style="margin:0;font-size:16px;line-height:1.65">Vos documents sont bien reçus. Le professionnel en charge de la mise en page vous adressera <b>un BAT à valider sous 3 jours ouvrés</b>.</p>
+<p style="margin:0;font-size:14px;color:var(--muted)">Une question ? Damien BOUGREAU, votre Responsable Suivi Partenaires : <a href="mailto:d.bougreau@lyceemarcelcallo.org">d.bougreau@lyceemarcelcallo.org</a> · <a href="tel:+33766889332">+33 7 66 88 93 32</a></p>
+</section>
+</main>
+<footer class="foot">OGEC Lycée Marcel Callo · 21 avenue Étienne Gascon, 35600 Redon · Vos fichiers ne sont communiqués à aucun tiers hors production du magazine</footer>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
