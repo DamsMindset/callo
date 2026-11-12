@@ -12,7 +12,7 @@ Temps réel : **25 à 35 minutes**, une seule fois. Compte Google de Damien.
 
 | Onglet | Rôle | Remplissage |
 |---|---|---|
-| **Suivi** | 1 ligne par contact, 50 colonnes : coordonnées, jalons datés, provenance, délais, score, statut | automatique (site + Brevo), sauf les 4 colonnes « (manuel) » |
+| **Suivi** | 1 ligne par contact, 54 colonnes : coordonnées, jalons datés, provenance, délais, score, statut | automatique (site + Brevo), sauf les 4 colonnes « (manuel) » |
 | **Journal** | chaque événement horodaté (visite, réponse, clic, dépôt, erreur) | automatique |
 | **Tableau de bord** | volumes, taux d'ouverture / clic / conversion, CA, panier moyen, délais moyens | formules |
 | **Parcours** | entonnoir en 10 étapes, **provenance par canal**, délais mesurés, points de friction | formules |
