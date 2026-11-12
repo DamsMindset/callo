@@ -654,10 +654,10 @@ function buildParcours_() {
   });
   var rInconnu = r0 + 2 + ordre.length;
   lignes.push(['(non renseigné)',
-    '=COUNTIF(' + colRange_('Canal') + ',"")',
-    '=COUNTIFS(' + colRange_('Canal') + ',"",' + colRange_('Date réponse formulaire') + ',"<>")',
+    '=COUNTIFS(' + colRange_('E-mail') + ',"<>",' + colRange_('Canal') + ',"")',
+    '=COUNTIFS(' + colRange_('E-mail') + ',"<>",' + colRange_('Canal') + ',"",' + colRange_('Date réponse formulaire') + ',"<>")',
     '=IFERROR(C' + rInconnu + '/B' + rInconnu + ',0)',
-    '=COUNTIFS(' + colRange_('Canal') + ',"",' + colRange_('Intérêt') + ',"Oui")',
+    '=COUNTIFS(' + colRange_('E-mail') + ',"<>",' + colRange_('Canal') + ',"",' + colRange_('Intérêt') + ',"Oui")',
     '=SUMIF(' + colRange_('Canal') + ',"",' + colRange_('Montant net € (manuel)') + ')']);
 
   p.getRange(r0 + 2, 1, lignes.length, 6).setFormulas(lignes);
@@ -695,11 +695,11 @@ function buildParcours_() {
   var r2 = r1 + 2 + dl.length + 2;
   var fretes = [
     ['POINTS DE FRICTION À SURVEILLER', '', ''],
-    ['Étape la plus faible', '=INDEX(A4:A14,MATCH(MIN(C4:C14),C4:C14,0))', ''],
-    ['Taux de cette étape', '=MIN(C4:C14)', ''],
-    ['Contacts bloqués à cette étape', '=INDEX(B4:B14,MATCH(MIN(C4:C14),C4:C14,0))-INDEX(B3:B13,MATCH(MIN(C4:C14),C4:C14,0))', ''],
+    ['Étape la plus faible', '=IFERROR(INDEX(A4:A13,MATCH(MIN(C4:C13),C4:C13,0)),"—")', ''],
+    ['Taux de cette étape', '=IFERROR(MIN(C4:C13),0)', ''],
+    ['Contacts bloqués à cette étape', '=IFERROR(INDEX(B4:B13,MATCH(MIN(C4:C13),C4:C13,0))-INDEX(B3:B12,MATCH(MIN(C4:C13),C4:C13,0)),0)', ''],
     ['Réponses « Non »', '=COUNTIF(' + colRange_('Intérêt') + ',"Non")', ''],
-    ['Contacts sans aucune activité', '=COUNTIFS(' + colRange_('Date envoi e-mail') + ',"",' + colRange_('Date 1re visite site') + ',"")', '']
+    ['Contacts sans aucune activité', '=COUNTIFS(' + colRange_('E-mail') + ',"<>",' + colRange_('Date envoi e-mail') + ',"",' + colRange_('Date 1re visite site') + ',"")', '']
   ];
   p.getRange(r2, 1, fretes.length, 3).setFormulas(fretes);
   p.getRange(r2, 1, 1, 3).setFontWeight('bold').setFontColor('#D4111F');

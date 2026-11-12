@@ -690,10 +690,10 @@ function buildParcours_() {
   });
   var rInconnu = r0 + 2 + ordre.length;
   lignes.push([&#x27;(non renseigné)&#x27;,
-    &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;)&#x27;,
-    &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Date réponse formulaire&#x27;) + &#x27;,&quot;&lt;&gt;&quot;)&#x27;,
+    &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;E-mail&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;)&#x27;,
+    &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;E-mail&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Date réponse formulaire&#x27;) + &#x27;,&quot;&lt;&gt;&quot;)&#x27;,
     &#x27;=IFERROR(C&#x27; + rInconnu + &#x27;/B&#x27; + rInconnu + &#x27;,0)&#x27;,
-    &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Oui&quot;)&#x27;,
+    &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;E-mail&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Oui&quot;)&#x27;,
     &#x27;=SUMIF(&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Montant net € (manuel)&#x27;) + &#x27;)&#x27;]);
 
   p.getRange(r0 + 2, 1, lignes.length, 6).setFormulas(lignes);
@@ -731,11 +731,11 @@ function buildParcours_() {
   var r2 = r1 + 2 + dl.length + 2;
   var fretes = [
     [&#x27;POINTS DE FRICTION À SURVEILLER&#x27;, &#x27;&#x27;, &#x27;&#x27;],
-    [&#x27;Étape la plus faible&#x27;, &#x27;=INDEX(A4:A14,MATCH(MIN(C4:C14),C4:C14,0))&#x27;, &#x27;&#x27;],
-    [&#x27;Taux de cette étape&#x27;, &#x27;=MIN(C4:C14)&#x27;, &#x27;&#x27;],
-    [&#x27;Contacts bloqués à cette étape&#x27;, &#x27;=INDEX(B4:B14,MATCH(MIN(C4:C14),C4:C14,0))-INDEX(B3:B13,MATCH(MIN(C4:C14),C4:C14,0))&#x27;, &#x27;&#x27;],
+    [&#x27;Étape la plus faible&#x27;, &#x27;=IFERROR(INDEX(A4:A13,MATCH(MIN(C4:C13),C4:C13,0)),&quot;—&quot;)&#x27;, &#x27;&#x27;],
+    [&#x27;Taux de cette étape&#x27;, &#x27;=IFERROR(MIN(C4:C13),0)&#x27;, &#x27;&#x27;],
+    [&#x27;Contacts bloqués à cette étape&#x27;, &#x27;=IFERROR(INDEX(B4:B13,MATCH(MIN(C4:C13),C4:C13,0))-INDEX(B3:B12,MATCH(MIN(C4:C13),C4:C13,0)),0)&#x27;, &#x27;&#x27;],
     [&#x27;Réponses « Non »&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Non&quot;)&#x27;, &#x27;&#x27;],
-    [&#x27;Contacts sans aucune activité&#x27;, &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;Date envoi e-mail&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Date 1re visite site&#x27;) + &#x27;,&quot;&quot;)&#x27;, &#x27;&#x27;]
+    [&#x27;Contacts sans aucune activité&#x27;, &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;E-mail&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Date envoi e-mail&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Date 1re visite site&#x27;) + &#x27;,&quot;&quot;)&#x27;, &#x27;&#x27;]
   ];
   p.getRange(r2, 1, fretes.length, 3).setFormulas(fretes);
   p.getRange(r2, 1, 1, 3).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#D4111F&#x27;);
