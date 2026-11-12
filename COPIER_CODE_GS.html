@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Copier Code.gs — Régie Callo 2027</title>
+<style>
+:root{--navy:#355D8D;--red:#D4111F;--ink:#1f2a37}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:#F4F6F1;color:var(--ink)}
+header{background:#fff;border-bottom:3px solid var(--red);padding:16px 24px;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+h1{margin:0;font-size:18px;color:var(--navy)}
+.sub{font-size:12px;color:#4a5b70;margin-top:3px}
+.btn{background:var(--red);color:#fff;border:0;border-radius:6px;font-size:15px;font-weight:700;padding:14px 24px;cursor:pointer}
+.btn:hover{background:#b30e1a}
+.btn.alt{background:var(--navy)}
+.wrap{padding:18px 24px 40px}
+.zone{background:#fff;border:1px solid #e1e6dd;border-radius:8px;padding:14px}
+textarea{width:100%;height:52vh;border:1px solid #cfd8e3;border-radius:6px;padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;color:#1f2a37}
+pre{display:none}
+.note{font-size:13px;line-height:1.6;color:#4a5b70;margin:14px 0 0}
+.ok{color:#1a7f37;font-weight:700}
+ol{font-size:13px;line-height:1.8;color:#1f2a37;margin:10px 0 0;padding-left:20px}
+@media(max-width:640px){header{padding:12px 16px}.wrap{padding:12px}}
+</style></head>
+<body>
+<header>
+  <div>
+    <h1>Code.gs — Régie Callo 2027 (script KPI v2.0)</h1>
+    <div class="sub">762 lignes · 42 Ko · à coller dans Google Apps Script</div>
+  </div>
+  <div>
+    <button class="btn" id="copier">Copier tout le code</button>
+    <button class="btn alt" id="telecharger">Télécharger Code.gs</button>
+  </div>
+</header>
+<div class="wrap">
+  <div class="zone">
+    <textarea id="code" readonly spellcheck="false">/**
+ * Régie publicitaire Callo 2027 — Script Google (Apps Script)
+ * ------------------------------------------------------------
+ * Reçoit les envois du mini-site (visite avec provenance, formulaire,
+ * téléchargements, commentaires, dépôt de fichiers) et les événements Brevo
+ * (envoi, ouverture, clic, rebond, désinscription), puis alimente :
+ *   - l&#x27;onglet « Suivi »      : une ligne par contact, statut et délais
+ *   - l&#x27;onglet « Journal »    : chaque événement horodaté
+ *   - l&#x27;onglet « Tableau de bord » : volumes, taux, chiffre d&#x27;affaires
+ *   - l&#x27;onglet « Parcours »   : provenance, entonnoir et expérience partenaire
+ *
+ * Installation : voir PROCESS_GOOGLE_SHEET_KPI.md
+ * Version : 2.0
+ */
+
+// ===================== CONFIGURATION =====================
+var CONFIG = {
+  TOKEN: &#x27;callo2027-nQ7xW2&#x27;,                       // identique à js/config.js
+  NOTIFY_EMAIL: &#x27;d.bougreau@lyceemarcelcallo.org&#x27;, // alertes réponses / dépôts
+  SEND_ACK_TO_PARTNER: true,                       // accusé de réception après dépôt
+  DRIVE_FOLDER_NAME: &#x27;Régie Callo 2027 - Dépôts partenaires&#x27;,
+  MAX_FILE_MB: 20,
+  // Partage des dossiers de dépôt. Le script s&#x27;exécute avec le compte qui le déploie :
+  // les fichiers arrivent donc dans le Drive de d.bougreau@lyceemarcelcallo.org.
+  // Ajouter ici les personnes qui doivent voir les dossiers (lecture seule).
+  // Partage en 2 temps : d.bougreau immédiatement.
+  // i.belaud sera ajouté APRÈS vérification du document par Damien :
+  // SHARE_FOLDER_WITH: [&#x27;d.bougreau@lyceemarcelcallo.org&#x27;, &#x27;i.belaud@lyceemarcelcallo.org&#x27;],
+  SHARE_FOLDER_WITH: [&#x27;d.bougreau@lyceemarcelcallo.org&#x27;],
+  // true = tout le domaine lyceemarcelcallo.org peut consulter le dossier en lecture
+  // (à n&#x27;activer que si l&#x27;établissement l&#x27;autorise).
+  SHARE_WITH_DOMAIN: false,
+  TZ: &#x27;Europe/Paris&#x27;
+};
+
+// Colonnes de l&#x27;onglet « Suivi » (une ligne par contact, clé = e-mail)
+var HEADERS = [
+  &#x27;E-mail&#x27;, &#x27;Entreprise&#x27;, &#x27;Nom&#x27;, &#x27;Prénom&#x27;, &#x27;Fonction&#x27;, &#x27;Téléphone&#x27;,
+  &#x27;Date envoi e-mail&#x27;, &#x27;Date ouverture e-mail&#x27;, &#x27;Date clic e-mail&#x27;, &#x27;Date 1re visite site&#x27;,
+  &#x27;Date réponse formulaire&#x27;, &#x27;Intérêt&#x27;, &#x27;Formats choisis&#x27;, &#x27;Raison (si non)&#x27;, &#x27;RGPD opt-in&#x27;,
+  &#x27;Date DL plaquette&#x27;, &#x27;Date DL CGV&#x27;, &#x27;Date DL bon de commande&#x27;, &#x27;Variante bon de commande&#x27;,
+  &#x27;Date réception bon de commande&#x27;, &#x27;Date réception encart&#x27;, &#x27;Date réception logo&#x27;,
+  &#x27;Date réception BAT signé&#x27;, &#x27;Date mise sous Drive BC&#x27;, &#x27;Date mise sous Drive BAT&#x27;, &#x27;Dossier Drive&#x27;,
+  &#x27;Date envoi devis (manuel)&#x27;, &#x27;Date envoi BAT (manuel)&#x27;, &#x27;Date validation BAT (manuel)&#x27;, &#x27;Montant net € (manuel)&#x27;,
+  &#x27;Commentaire partenaire&#x27;, &#x27;Statut&#x27;, &#x27;Dernière activité&#x27;, &#x27;Etat e-mail&#x27;,
+  // --- analyse de provenance et d&#x27;expérience (remplissage automatique) ---
+  &#x27;Canal&#x27;, &#x27;Source&#x27;, &#x27;Page d\&#x27;entrée&#x27;, &#x27;Referrer&#x27;, &#x27;Premier contact&#x27;,
+  &#x27;Délai clic→réponse (h)&#x27;, &#x27;Délai réponse→BC (j)&#x27;, &#x27;Délai BC→documents (j)&#x27;, &#x27;Délai documents→BAT (j)&#x27;,
+  &#x27;Score engagement&#x27;,
+  // --- comportement de visite (remplissage automatique) ---
+  &#x27;Connexion (jour/heure)&#x27;, &#x27;Navigateur&#x27;, &#x27;Appareil&#x27;, &#x27;Écran&#x27;,
+  &#x27;Durée de visite (s)&#x27;, &#x27;Pages vues&#x27;, &#x27;Dernière page vue&#x27;, &#x27;Nom dossier Drive&#x27;,
+  &#x27;Fichiers présents dans Drive&#x27;, &#x27;Dernier contrôle Drive&#x27;
+];
+var DATE_COLS = [&#x27;Date envoi e-mail&#x27;, &#x27;Date ouverture e-mail&#x27;, &#x27;Date clic e-mail&#x27;, &#x27;Date 1re visite site&#x27;,
+  &#x27;Date réponse formulaire&#x27;, &#x27;Date DL plaquette&#x27;, &#x27;Date DL CGV&#x27;, &#x27;Date DL bon de commande&#x27;,
+  &#x27;Date réception bon de commande&#x27;, &#x27;Date réception encart&#x27;, &#x27;Date réception logo&#x27;,
+  &#x27;Date réception BAT signé&#x27;, &#x27;Date envoi devis (manuel)&#x27;, &#x27;Date envoi BAT (manuel)&#x27;, &#x27;Date validation BAT (manuel)&#x27;,
+  &#x27;Dernière activité&#x27;, &#x27;Premier contact&#x27;, &#x27;Connexion (jour/heure)&#x27;,
+  &#x27;Date mise sous Drive BC&#x27;, &#x27;Date mise sous Drive BAT&#x27;, &#x27;Dernier contrôle Drive&#x27;];
+var SHEET_SUIVI = &#x27;Suivi&#x27;, SHEET_LOG = &#x27;Journal&#x27;, SHEET_KPI = &#x27;Tableau de bord&#x27;, SHEET_PARCOURS = &#x27;Parcours&#x27;;
+var VERSION = &#x27;v2.0&#x27;;
+
+// Libellés lisibles pour les canaux
+var CANAUX = {
+  email1: &#x27;Emailing — envoi principal&#x27;,
+  relance1: &#x27;Emailing — relance 1&#x27;,
+  &#x27;relance2&#x27;: &#x27;Emailing — relance 2&#x27;,
+  &#x27;dernier-mail&#x27;: &#x27;Emailing — dernier mail&#x27;,
+  &#x27;email1-bas&#x27;: &#x27;Emailing — envoi principal (CTA bas)&#x27;,
+  direct: &#x27;Site direct / recherche&#x27;,
+  qr: &#x27;QR code / support imprimé&#x27;,
+  bouche: &#x27;Bouche-à-oreille&#x27;,
+  lien: &#x27;Lien partagé&#x27;
+};
+
+// ===================== POINTS D&#x27;ENTRÉE =====================
+function doGet(e) {
+  var p = (e &amp;&amp; e.parameter) || {};
+  if (p.k &amp;&amp; p.k === CONFIG.TOKEN &amp;&amp; p.action === &#x27;kpi&#x27;) {
+    var sh = sheet_(SHEET_SUIVI);
+    var n = Math.max(0, sh.getLastRow() - 1);
+    return json_({ ok: true, version: VERSION, contacts: n, onglets: [SHEET_SUIVI, SHEET_LOG, SHEET_KPI, SHEET_PARCOURS] });
+  }
+  return json_({ ok: true, service: &#x27;Régie Callo 2027&#x27;, version: VERSION });
+}
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(25000);
+    var body = {};
+    try { body = JSON.parse((e.postData &amp;&amp; e.postData.contents) || &#x27;{}&#x27;); } catch (err) { return json_({ ok: false, error: &#x27;JSON invalide&#x27; }); }
+    var token = body.token || (e.parameter &amp;&amp; e.parameter.k);
+    if (token !== CONFIG.TOKEN) return json_({ ok: false, error: &#x27;Non autorisé&#x27; });
+
+    // Événement Brevo (webhook) : { event, email, ... }
+    if (body.event &amp;&amp; !body.action) return json_(handleBrevo_(body));
+
+    switch (body.action) {
+      case &#x27;visite&#x27;:      return json_(handleVisite_(body));
+      case &#x27;reponse&#x27;:     return json_(handleReponse_(body));
+      case &#x27;download&#x27;:    return json_(handleDownload_(body));
+      case &#x27;commentaire&#x27;: return json_(handleCommentaire_(body));
+      case &#x27;depot&#x27;:       return json_(handleDepot_(body));
+      case &#x27;duree&#x27;:       return json_(handleDuree_(body));
+      default:            return json_({ ok: false, error: &#x27;Action inconnue&#x27; });
+    }
+  } catch (err) {
+    log_(&#x27;ERREUR&#x27;, &#x27;&#x27;, String(err &amp;&amp; err.stack || err));
+    return json_({ ok: false, error: &#x27;Erreur serveur&#x27; });
+  } finally {
+    try { lock.releaseLock(); } catch (x) {}
+  }
+}
+
+// ===================== PROVENANCE =====================
+/** Traduit un code source (c=, utm_source=) en canal lisible. */
+function canal_(source) {
+  var s = String(source || &#x27;&#x27;).toLowerCase().trim();
+  if (!s) return &#x27;Site direct / recherche&#x27;;
+  if (CANAUX[s]) return CANAUX[s];
+  if (s.indexOf(&#x27;email&#x27;) === 0) return &#x27;Emailing — &#x27; + s;
+  if (s.indexOf(&#x27;relance&#x27;) === 0) return &#x27;Emailing — &#x27; + s;
+  return s;
+}
+
+/** Enregistre la provenance d&#x27;une première visite. */
+function provenance_(row, b) {
+  if (b.source) setIfEmpty_(row, &#x27;Source&#x27;, String(b.source).slice(0, 60));
+  if (b.canal || b.source) setIfEmpty_(row, &#x27;Canal&#x27;, canal_(b.canal || b.source));
+  if (b.page) setIfEmpty_(row, &#x27;Page d\&#x27;entrée&#x27;, String(b.page).slice(0, 60));
+  if (b.referrer) setIfEmpty_(row, &#x27;Referrer&#x27;, String(b.referrer).slice(0, 120));
+  if (b.navigateur) setIfEmpty_(row, &#x27;Navigateur&#x27;, String(b.navigateur).slice(0, 40));
+  if (b.appareil) setIfEmpty_(row, &#x27;Appareil&#x27;, String(b.appareil).slice(0, 20));
+  if (b.ecran) setIfEmpty_(row, &#x27;Écran&#x27;, String(b.ecran).slice(0, 20));
+  setIfEmpty_(row, &#x27;Premier contact&#x27;, new Date());
+  setIfEmpty_(row, &#x27;Connexion (jour/heure)&#x27;, new Date());
+}
+
+// ===================== GESTIONNAIRES =====================
+function handleBrevo_(b) {
+  var email = String(b.email || &#x27;&#x27;).toLowerCase().trim();
+  if (!email) return { ok: false, error: &#x27;e-mail manquant&#x27; };
+  var ev = String(b.event).toLowerCase();
+  var row = upsert_(email);
+  var when = parseDate_(b.date || b[&#x27;event-date&#x27;] || b.ts_event || b.ts) || new Date();
+  if ([&#x27;request&#x27;, &#x27;sent&#x27;, &#x27;delivered&#x27;, &#x27;delivery&#x27;].indexOf(ev) &gt;= 0) setIfEmpty_(row, &#x27;Date envoi e-mail&#x27;, when);
+  else if ([&#x27;opened&#x27;, &#x27;unique_opened&#x27;, &#x27;uniqueopened&#x27;, &#x27;proxy_open&#x27;, &#x27;open&#x27;].indexOf(ev) &gt;= 0) setIfEmpty_(row, &#x27;Date ouverture e-mail&#x27;, when);
+  else if ([&#x27;click&#x27;, &#x27;clicks&#x27;].indexOf(ev) &gt;= 0) { setIfEmpty_(row, &#x27;Date clic e-mail&#x27;, when); setIfEmpty_(row, &#x27;Date ouverture e-mail&#x27;, when); }
+  else if ([&#x27;hard_bounce&#x27;, &#x27;soft_bounce&#x27;, &#x27;blocked&#x27;, &#x27;invalid_email&#x27;, &#x27;spam&#x27;, &#x27;unsubscribe&#x27;, &#x27;unsubscribed&#x27;].indexOf(ev) &gt;= 0) set_(row, &#x27;Etat e-mail&#x27;, ev);
+  if (b.campaign || b.tag) { setIfEmpty_(row, &#x27;Source&#x27;, String(b.campaign || b.tag)); setIfEmpty_(row, &#x27;Canal&#x27;, canal_(b.campaign || b.tag)); }
+  log_(&#x27;BREVO&#x27;, email, ev);
+  finish_(row);
+  return { ok: true };
+}
+
+function handleVisite_(b) {
+  var email = clean_(b.email);
+  if (!email) { log_(&#x27;VISITE&#x27;, &#x27;(anonyme)&#x27;, [b.source, b.page, b.referrer].join(&#x27; · &#x27;)); return { ok: true }; }
+  var row = upsert_(email);
+  provenance_(row, b);
+  setIfEmpty_(row, &#x27;Date 1re visite site&#x27;, new Date());
+  setIfEmpty_(row, &#x27;Date clic e-mail&#x27;, new Date());
+  log_(&#x27;VISITE&#x27;, email, [b.source || &#x27;&#x27;, b.page || &#x27;&#x27;, b.referrer || &#x27;&#x27;].join(&#x27; · &#x27;));
+  finish_(row);
+  return { ok: true };
+}
+
+function handleReponse_(b) {
+  var email = clean_(b.email);
+  if (!email) return { ok: false, error: &#x27;e-mail manquant&#x27; };
+  var row = upsert_(email);
+  provenance_(row, b);
+  set_(row, &#x27;Entreprise&#x27;, b.entreprise); set_(row, &#x27;Nom&#x27;, b.nom); set_(row, &#x27;Prénom&#x27;, b.prenom);
+  set_(row, &#x27;Fonction&#x27;, b.fonction); set_(row, &#x27;Téléphone&#x27;, b.tel);
+  set_(row, &#x27;Date réponse formulaire&#x27;, new Date());
+  set_(row, &#x27;Intérêt&#x27;, { oui: &#x27;Oui&#x27;, peut: &#x27;Peut-être&#x27;, non: &#x27;Non&#x27; }[b.interet] || b.interet);
+  set_(row, &#x27;Formats choisis&#x27;, (b.formats || []).join(&#x27; | &#x27;));
+  set_(row, &#x27;Raison (si non)&#x27;, String(b.raison || &#x27;&#x27;).slice(0, 300));
+  set_(row, &#x27;RGPD opt-in&#x27;, b.rgpd ? &#x27;Oui&#x27; : &#x27;Non&#x27;);
+  setIfEmpty_(row, &#x27;Date 1re visite site&#x27;, new Date());
+  log_(&#x27;REPONSE&#x27;, email, b.interet + &#x27; &#x27; + (b.formats || []).join(&#x27;,&#x27;));
+  finish_(row);
+  notify_(&#x27;Réponse partenaire : &#x27; + b.entreprise + &#x27; (&#x27; + (b.interet || &#x27;&#x27;) + &#x27;)&#x27;,
+    &#x27;Entreprise : &#x27; + b.entreprise + &#x27;\nContact : &#x27; + b.prenom + &#x27; &#x27; + b.nom + &#x27; (&#x27; + b.fonction + &#x27;)\nTél : &#x27; + b.tel + &#x27;\nE-mail : &#x27; + email +
+    &#x27;\nIntérêt : &#x27; + b.interet + &#x27;\nFormats : &#x27; + (b.formats || []).join(&#x27;, &#x27;) +
+    &#x27;\nProvenance : &#x27; + (b.canal || canal_(b.source) || &#x27;inconnue&#x27;) + (b.source ? &#x27; (&#x27; + b.source + &#x27;)&#x27; : &#x27;&#x27;) +
+    (b.raison ? &#x27;\nRaison : &#x27; + b.raison : &#x27;&#x27;));
+  return { ok: true };
+}
+
+function handleDownload_(b) {
+  var email = clean_(b.email);
+  var map = { &#x27;plaquette&#x27;: &#x27;Date DL plaquette&#x27;, &#x27;cgv&#x27;: &#x27;Date DL CGV&#x27;, &#x27;bon-de-commande-pdf&#x27;: &#x27;Date DL bon de commande&#x27;, &#x27;bon-de-commande-docx&#x27;: &#x27;Date DL bon de commande&#x27; };
+  log_(&#x27;TELECHARGEMENT&#x27;, email || &#x27;(anonyme)&#x27;, (b.doc || &#x27;&#x27;) + &#x27; &#x27; + (b.detail || &#x27;&#x27;));
+  if (email &amp;&amp; map[b.doc]) {
+    var row = upsert_(email);
+    provenance_(row, b);
+    setIfEmpty_(row, map[b.doc], new Date());
+    if (b.doc.indexOf(&#x27;bon-de-commande&#x27;) === 0 &amp;&amp; b.detail) set_(row, &#x27;Variante bon de commande&#x27;, b.detail);
+    finish_(row);
+  }
+  return { ok: true };
+}
+
+/** Temps passé sur le site : cumul des secondes et nombre de pages vues. */
+function handleDuree_(b) {
+  var email = clean_(b.email);
+  var sec = Math.max(0, Math.min(7200, parseInt(b.seconds, 10) || 0));
+  var pages = Math.max(0, Math.min(99, parseInt(b.pages, 10) || 0));
+  if (!email) { log_(&#x27;DUREE&#x27;, &#x27;(anonyme)&#x27;, sec + &#x27; s · &#x27; + (b.page || &#x27;&#x27;)); return { ok: true }; }
+  var row = upsert_(email);
+  provenance_(row, b);
+  var prev = parseFloat(get_(row, &#x27;Durée de visite (s)&#x27;)) || 0;
+  set_(row, &#x27;Durée de visite (s)&#x27;, Math.round((prev + sec) * 10) / 10);
+  var seen = parseInt(get_(row, &#x27;Pages vues&#x27;), 10) || 0;
+  if (pages &gt; seen) set_(row, &#x27;Pages vues&#x27;, pages);
+  if (b.page) set_(row, &#x27;Dernière page vue&#x27;, String(b.page).slice(0, 60));
+  log_(&#x27;DUREE&#x27;, email, sec + &#x27; s · &#x27; + (b.page || &#x27;&#x27;) + &#x27; · &#x27; + pages + &#x27; page(s)&#x27;);
+  finish_(row);
+  return { ok: true };
+}
+
+function handleCommentaire_(b) {
+  var email = clean_(b.email);
+  log_(&#x27;COMMENTAIRE&#x27;, email || &#x27;(anonyme)&#x27;, String(b.message || &#x27;&#x27;).slice(0, 500));
+  if (email) {
+    var row = upsert_(email);
+    var old = get_(row, &#x27;Commentaire partenaire&#x27;);
+    set_(row, &#x27;Commentaire partenaire&#x27;, (old ? old + &#x27;\n---\n&#x27; : &#x27;&#x27;) + Utilities.formatDate(new Date(), CONFIG.TZ, &#x27;dd/MM/yyyy HH:mm&#x27;) + &#x27; : &#x27; + String(b.message || &#x27;&#x27;).slice(0, 2000));
+    finish_(row);
+  }
+  notify_(&#x27;Commentaire partenaire&#x27; + (b.entreprise ? &#x27; : &#x27; + b.entreprise : &#x27;&#x27;), String(b.message || &#x27;&#x27;) + &#x27;\n\nE-mail : &#x27; + (email || &#x27;inconnu&#x27;));
+  return { ok: true };
+}
+
+function handleDepot_(b) {
+  var email = clean_(b.email);
+  if (!email) return { ok: false, error: &#x27;e-mail manquant&#x27; };
+  var files = b.files || [];
+  var total = 0;
+  files.forEach(function (f) { total += (f.data || &#x27;&#x27;).length * 0.75; });
+  if (total &gt; CONFIG.MAX_FILE_MB * 1048576) return { ok: false, error: &#x27;Fichiers trop volumineux&#x27; };
+
+  var entreprise = String(b.entreprise || &#x27;Sans-nom&#x27;).trim();
+  var folder = companyFolder_(entreprise);
+  var labels = { bon: &#x27;bon-de-commande&#x27;, encart: &#x27;encart&#x27;, logo: &#x27;logo&#x27;, bat: &#x27;bat-signe&#x27; };
+  var cols = { bon: &#x27;Date réception bon de commande&#x27;, encart: &#x27;Date réception encart&#x27;, logo: &#x27;Date réception logo&#x27;, bat: &#x27;Date réception BAT signé&#x27; };
+  var row = upsert_(email);
+  provenance_(row, b);
+  set_(row, &#x27;Entreprise&#x27;, get_(row, &#x27;Entreprise&#x27;) || entreprise);
+  var stamp = Utilities.formatDate(new Date(), CONFIG.TZ, &#x27;yyyyMMdd-HHmm&#x27;);
+  var maintenant = new Date();
+  files.forEach(function (f) {
+    var name = safeName_(f.name || &#x27;fichier&#x27;);
+    var blob = Utilities.newBlob(Utilities.base64Decode(f.data || &#x27;&#x27;), f.mime || &#x27;application/octet-stream&#x27;,
+      labels[f.field] + &#x27;_&#x27; + safeName_(entreprise) + &#x27;_&#x27; + stamp + &#x27;_&#x27; + name);
+    folder.createFile(blob);
+    if (cols[f.field]) set_(row, cols[f.field], maintenant);
+    // date de mise sous Drive, par document
+    if (f.field === &#x27;bon&#x27;) set_(row, &#x27;Date mise sous Drive BC&#x27;, maintenant);
+    if (f.field === &#x27;bat&#x27;) set_(row, &#x27;Date mise sous Drive BAT&#x27;, maintenant);
+  });
+  set_(row, &#x27;Dossier Drive&#x27;, folder.getUrl());
+  set_(row, &#x27;Nom dossier Drive&#x27;, folder.getName());
+  controlerDossier_(row, folder);
+  log_(&#x27;DEPOT&#x27;, email, files.length + &#x27; fichier(s) — &#x27; + folder.getUrl());
+  finish_(row);
+  notify_(&#x27;Dépôt de documents : &#x27; + entreprise, &#x27;Fichiers reçus : &#x27; + files.map(function (f) { return f.field + &#x27; = &#x27; + f.name; }).join(&#x27;, &#x27;) +
+    &#x27;\nDossier : &#x27; + folder.getUrl() + &#x27;\nE-mail : &#x27; + email + &#x27;\nBAT à envoyer sous 3 jours ouvrés.&#x27;);
+  if (CONFIG.SEND_ACK_TO_PARTNER) {
+    try {
+      MailApp.sendEmail({
+        to: email, name: &#x27;Régie publicitaire Callo&#x27;, replyTo: CONFIG.NOTIFY_EMAIL,
+        subject: &#x27;Callo 2027 : nous avons bien reçu vos documents&#x27;,
+        body: &#x27;Bonjour,\n\nMerci de votre envoi : le bon de commande, votre encart et votre logo sont bien reçus.\n&#x27; +
+          &#x27;Le professionnel en charge de la mise en page vous adressera un BAT à valider sous 3 jours ouvrés.\n\n&#x27; +
+          &#x27;Une question ? Répondez à ce message ou contactez Damien BOUGREAU, Responsable Suivi Partenaires : &#x27; + CONFIG.NOTIFY_EMAIL + &#x27; · +33 7 66 88 93 32.\n\n&#x27; +
+          &#x27;Régie publicitaire Marcel Callo · OGEC Lycée Marcel Callo, 35600 Redon&#x27;
+      });
+    } catch (err) { log_(&#x27;ERREUR&#x27;, email, &#x27;Accusé non envoyé : &#x27; + err); }
+  }
+  return { ok: true };
+}
+
+// ===================== FEUILLE « SUIVI » =====================
+function sheet_(name) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+
+function colIndex_(header) {
+  var i = HEADERS.indexOf(header);
+  if (i &lt; 0) throw new Error(&#x27;Colonne inconnue : &#x27; + header);
+  return i + 1;
+}
+
+/** Retourne le n° de ligne du contact, en le créant si besoin. */
+function upsert_(email) {
+  var sh = sheet_(SHEET_SUIVI);
+  if (sh.getLastRow() &lt; 1) setup_();
+  var last = sh.getLastRow();
+  if (last &gt;= 2) {
+    var emails = sh.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i &lt; emails.length; i++) {
+      if (String(emails[i][0]).toLowerCase().trim() === email) return i + 2;
+    }
+  }
+  sh.appendRow([email]);
+  var r = sh.getLastRow();
+  DATE_COLS.forEach(function (h) { sh.getRange(r, colIndex_(h)).setNumberFormat(&#x27;dd/MM/yyyy HH:mm&#x27;); });
+  return r;
+}
+
+function get_(row, header) { return sheet_(SHEET_SUIVI).getRange(row, colIndex_(header)).getValue(); }
+function set_(row, header, value) {
+  if (value === undefined || value === null || value === &#x27;&#x27;) return;
+  sheet_(SHEET_SUIVI).getRange(row, colIndex_(header)).setValue(value);
+}
+function setIfEmpty_(row, header, value) {
+  var c = sheet_(SHEET_SUIVI).getRange(row, colIndex_(header));
+  if (c.getValue() === &#x27;&#x27; || c.getValue() === null) c.setValue(value);
+}
+function has_(row, h) { var v = get_(row, h); return v !== &#x27;&#x27; &amp;&amp; v !== null; }
+function date_(row, h) { var v = get_(row, h); return (v instanceof Date) ? v : null; }
+
+/** Écarts en heures / jours entre deux jalons (null si l&#x27;un manque). */
+function ecart_(row, h1, h2, unit) {
+  var a = date_(row, h1), b = date_(row, h2);
+  if (!a || !b) return &#x27;&#x27;;
+  var diff = (b.getTime() - a.getTime()) / (unit === &#x27;h&#x27; ? 3600000 : 86400000);
+  return Math.round(diff * 10) / 10;
+}
+
+/** Renseigne les délais de parcours et le score d&#x27;engagement. */
+function analyse_(row) {
+  var d1 = ecart_(row, &#x27;Date clic e-mail&#x27;, &#x27;Date réponse formulaire&#x27;, &#x27;h&#x27;);
+  if (d1 === &#x27;&#x27; &amp;&amp; has_(row, &#x27;Date 1re visite site&#x27;) &amp;&amp; has_(row, &#x27;Date réponse formulaire&#x27;)) d1 = ecart_(row, &#x27;Date 1re visite site&#x27;, &#x27;Date réponse formulaire&#x27;, &#x27;h&#x27;);
+  if (d1 !== &#x27;&#x27;) set_(row, &#x27;Délai clic→réponse (h)&#x27;, d1);
+
+  var d2 = ecart_(row, &#x27;Date réponse formulaire&#x27;, &#x27;Date réception bon de commande&#x27;, &#x27;j&#x27;); if (d2 !== &#x27;&#x27;) set_(row, &#x27;Délai réponse→BC (j)&#x27;, d2);
+  var d3 = ecart_(row, &#x27;Date réception bon de commande&#x27;, &#x27;Date réception logo&#x27;, &#x27;j&#x27;); if (d3 !== &#x27;&#x27;) set_(row, &#x27;Délai BC→documents (j)&#x27;, d3);
+  var d4 = ecart_(row, &#x27;Date réception logo&#x27;, &#x27;Date envoi BAT (manuel)&#x27;, &#x27;j&#x27;);
+  if (d4 === &#x27;&#x27;) d4 = ecart_(row, &#x27;Date réception bon de commande&#x27;, &#x27;Date envoi BAT (manuel)&#x27;, &#x27;j&#x27;);
+  if (d4 !== &#x27;&#x27;) set_(row, &#x27;Délai documents→BAT (j)&#x27;, d4);
+
+  var score = 0;
+  if (has_(row, &#x27;Date ouverture e-mail&#x27;)) score += 10;
+  if (has_(row, &#x27;Date clic e-mail&#x27;)) score += 15;
+  if (has_(row, &#x27;Date 1re visite site&#x27;)) score += 10;
+  if (has_(row, &#x27;Date réponse formulaire&#x27;)) score += 25;
+  if (has_(row, &#x27;Date DL bon de commande&#x27;)) score += 10;
+  if (has_(row, &#x27;Date réception bon de commande&#x27;)) score += 15;
+  if (has_(row, &#x27;Date réception encart&#x27;) &amp;&amp; has_(row, &#x27;Date réception logo&#x27;)) score += 10;
+  if (has_(row, &#x27;Date validation BAT (manuel)&#x27;)) score += 5;
+  set_(row, &#x27;Score engagement&#x27;, Math.min(100, score));
+}
+
+/** Met à jour « Dernière activité », « Statut » et les calculs d&#x27;analyse. */
+function finish_(row) {
+  set_(row, &#x27;Dernière activité&#x27;, new Date());
+  analyse_(row);
+  set_(row, &#x27;Statut&#x27;, computeStatus_(row));
+}
+
+function computeStatus_(row) {
+  if (has_(row, &#x27;Date validation BAT (manuel)&#x27;) &amp;&amp; has_(row, &#x27;Date réception BAT signé&#x27;)) return &#x27;10 · BAT signé reçu — dossier bouclé&#x27;;
+  if (has_(row, &#x27;Date réception BAT signé&#x27;)) return &#x27;9 · BAT signé reçu&#x27;;
+  if (has_(row, &#x27;Date validation BAT (manuel)&#x27;)) return &#x27;9 · BAT validé&#x27;;
+  if (has_(row, &#x27;Date envoi BAT (manuel)&#x27;)) return &#x27;8 · BAT envoyé, à valider&#x27;;
+  if (has_(row, &#x27;Date réception encart&#x27;) &amp;&amp; has_(row, &#x27;Date réception logo&#x27;) &amp;&amp; has_(row, &#x27;Date réception bon de commande&#x27;)) return &#x27;7 · Documents reçus, BAT à produire&#x27;;
+  if (has_(row, &#x27;Date réception bon de commande&#x27;)) return &#x27;6 · Bon de commande reçu (encart/logo en attente)&#x27;;
+  if (has_(row, &#x27;Date DL bon de commande&#x27;)) return &#x27;5 · Bon de commande téléchargé&#x27;;
+  if (has_(row, &#x27;Date réponse formulaire&#x27;)) {
+    var i = String(get_(row, &#x27;Intérêt&#x27;));
+    return i === &#x27;Non&#x27; ? &#x27;0 · Non (relance N+1)&#x27; : (i === &#x27;Peut-être&#x27; ? &#x27;4 · Peut-être, à relancer&#x27; : &#x27;4 · Oui, à convertir&#x27;);
+  }
+  if (has_(row, &#x27;Date 1re visite site&#x27;)) return &#x27;3 · A visité le site&#x27;;
+  if (has_(row, &#x27;Date clic e-mail&#x27;)) return &#x27;2 · A cliqué&#x27;;
+  if (has_(row, &#x27;Date ouverture e-mail&#x27;)) return &#x27;1 · A ouvert&#x27;;
+  if (has_(row, &#x27;Date envoi e-mail&#x27;)) return &#x27;1 · Envoyé&#x27;;
+  return &#x27;Nouveau&#x27;;
+}
+
+// Recalcul du statut quand une date « manuel » est saisie à la main
+function onEdit(e) {
+  try {
+    var sh = e.range.getSheet();
+    if (sh.getName() !== SHEET_SUIVI || e.range.getRow() &lt; 2) return;
+    var h = HEADERS[e.range.getColumn() - 1] || &#x27;&#x27;;
+    if (/\(manuel\)/.test(h)) { var r = e.range.getRow(); analyse_(r); set_(r, &#x27;Statut&#x27;, computeStatus_(r)); set_(r, &#x27;Dernière activité&#x27;, new Date()); }
+  } catch (err) {}
+}
+
+// ===================== JOURNAL, DRIVE, MAIL =====================
+function log_(type, email, detail) {
+  var sh = sheet_(SHEET_LOG);
+  if (sh.getLastRow() &lt; 1) { sh.appendRow([&#x27;Date&#x27;, &#x27;Événement&#x27;, &#x27;E-mail&#x27;, &#x27;Détail&#x27;]); sh.setFrozenRows(1); sh.getRange(&#x27;A:A&#x27;).setNumberFormat(&#x27;dd/MM/yyyy HH:mm:ss&#x27;); }
+  sh.appendRow([new Date(), type, email, String(detail || &#x27;&#x27;).slice(0, 1000)]);
+}
+
+/**
+ * Vérifie ce qui est réellement présent dans le dossier Drive du partenaire,
+ * écrit le résumé dans la feuille et renseigne les dates de mise sous Drive
+ * à partir de la date de création réelle des fichiers.
+ */
+function controlerDossier_(row, folder) {
+  try {
+    var f = folder || null;
+    if (!f) {
+      var nom = get_(row, &#x27;Nom dossier Drive&#x27;) || safeName_(get_(row, &#x27;Entreprise&#x27;) || &#x27;&#x27;);
+      if (!nom) return &#x27;&#x27;;
+      var racines = DriveApp.getFoldersByName(CONFIG.DRIVE_FOLDER_NAME);
+      if (!racines.hasNext()) return &#x27;&#x27;;
+      var root = racines.next();
+      var sous = root.getFoldersByName(nom);
+      if (!sous.hasNext()) { set_(row, &#x27;Fichiers présents dans Drive&#x27;, &#x27;dossier introuvable&#x27;); return &#x27;&#x27;; }
+      f = sous.next();
+    }
+    var trouve = { bon: false, encart: false, logo: false, bat: false };
+    var dates = { bon: null, bat: null };
+    var it = f.getFiles();
+    while (it.hasNext()) {
+      var file = it.next();
+      var n = String(file.getName()).toLowerCase();
+      Object.keys(trouve).forEach(function (k) {
+        var prefixe = { bon: &#x27;bon-de-commande_&#x27;, encart: &#x27;encart_&#x27;, logo: &#x27;logo_&#x27;, bat: &#x27;bat-signe_&#x27; }[k];
+        if (n.indexOf(prefixe) === 0) {
+          trouve[k] = true;
+          if ((k === &#x27;bon&#x27; || k === &#x27;bat&#x27;) &amp;&amp; !dates[k]) dates[k] = file.getDateCreated();
+        }
+      });
+    }
+    var resume = &#x27;BC &#x27; + (trouve.bon ? &#x27;✓&#x27; : &#x27;✗&#x27;) +
+      &#x27; · Encart &#x27; + (trouve.encart ? &#x27;✓&#x27; : &#x27;✗&#x27;) +
+      &#x27; · Logo &#x27; + (trouve.logo ? &#x27;✓&#x27; : &#x27;✗&#x27;) +
+      &#x27; · BAT &#x27; + (trouve.bat ? &#x27;✓&#x27; : &#x27;✗&#x27;);
+    set_(row, &#x27;Fichiers présents dans Drive&#x27;, resume);
+    set_(row, &#x27;Dernier contrôle Drive&#x27;, new Date());
+    if (dates.bon) set_(row, &#x27;Date mise sous Drive BC&#x27;, dates.bon);
+    if (dates.bat) set_(row, &#x27;Date mise sous Drive BAT&#x27;, dates.bat);
+    if (trouve.bon &amp;&amp; !has_(row, &#x27;Date réception bon de commande&#x27;)) set_(row, &#x27;Date réception bon de commande&#x27;, dates.bon || new Date());
+    if (trouve.bat &amp;&amp; !has_(row, &#x27;Date réception BAT signé&#x27;)) set_(row, &#x27;Date réception BAT signé&#x27;, dates.bat || new Date());
+    return resume;
+  } catch (e) {
+    log_(&#x27;ERREUR&#x27;, &#x27;&#x27;, &#x27;Contrôle Drive : &#x27; + e);
+    return &#x27;&#x27;;
+  }
+}
+
+/** Balaye tous les contacts et met à jour la présence réelle des fichiers. */
+function controlerDrive() {
+  var sh = sheet_(SHEET_SUIVI), n = sh.getLastRow(), fait = 0, avecBat = 0, avecBc = 0;
+  for (var r = 2; r &lt;= n; r++) {
+    if (!has_(r, &#x27;E-mail&#x27;)) continue;
+    var resume = controlerDossier_(r, null);
+    if (resume) {
+      fait++;
+      if (resume.indexOf(&#x27;BAT ✓&#x27;) &gt;= 0) avecBat++;
+      if (resume.indexOf(&#x27;BC ✓&#x27;) &gt;= 0) avecBc++;
+    }
+    set_(r, &#x27;Statut&#x27;, computeStatus_(r));
+  }
+  SpreadsheetApp.getActiveSpreadsheet().toast(fait + &#x27; dossier(s) contrôlé(s) — &#x27; + avecBc + &#x27; avec bon de commande, &#x27; + avecBat + &#x27; avec BAT signé.&#x27;, &#x27;Contrôle Drive&#x27;, 8);
+}
+
+/** Applique le partage une seule fois par dossier (marqueur dans la description). */
+function shareOnce_(folder) {
+  try {
+    if (String(folder.getDescription() || &#x27;&#x27;).indexOf(&#x27;callo-shared&#x27;) === 0) return;
+    (CONFIG.SHARE_FOLDER_WITH || []).forEach(function (mail) {
+      try { folder.addViewer(mail); } catch (e) { log_(&#x27;ERREUR&#x27;, &#x27;&#x27;, &#x27;Partage &#x27; + mail + &#x27; : &#x27; + e); }
+    });
+    if (CONFIG.SHARE_WITH_DOMAIN) {
+      try { folder.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); }
+      catch (e) { log_(&#x27;ERREUR&#x27;, &#x27;&#x27;, &#x27;Partage domaine : &#x27; + e); }
+    }
+    folder.setDescription(&#x27;callo-shared &#x27; + Utilities.formatDate(new Date(), CONFIG.TZ, &#x27;dd/MM/yyyy HH:mm&#x27;));
+  } catch (e) {
+    log_(&#x27;ERREUR&#x27;, &#x27;&#x27;, &#x27;Partage dossier : &#x27; + e);
+  }
+}
+
+function companyFolder_(entreprise) {
+  var roots = DriveApp.getFoldersByName(CONFIG.DRIVE_FOLDER_NAME);
+  var root = roots.hasNext() ? roots.next() : DriveApp.createFolder(CONFIG.DRIVE_FOLDER_NAME);
+  shareOnce_(root);
+  var name = safeName_(entreprise);
+  var subs = root.getFoldersByName(name);
+  var folder = subs.hasNext() ? subs.next() : root.createFolder(name);
+  shareOnce_(folder);
+  return folder;
+}
+
+/** Crée le dossier racine et applique le partage, sans attendre un dépôt. */
+function preparerDossiers() {
+  var roots = DriveApp.getFoldersByName(CONFIG.DRIVE_FOLDER_NAME);
+  var root = roots.hasNext() ? roots.next() : DriveApp.createFolder(CONFIG.DRIVE_FOLDER_NAME);
+  shareOnce_(root);
+  SpreadsheetApp.getActiveSpreadsheet().toast(&#x27;Dossier Drive prêt et partagé : &#x27; + root.getUrl());
+  return root.getUrl();
+}
+
+function notify_(subject, body) {
+  try { MailApp.sendEmail(CONFIG.NOTIFY_EMAIL, &#x27;[Régie Callo] &#x27; + subject, body); } catch (err) { log_(&#x27;ERREUR&#x27;, &#x27;&#x27;, &#x27;Notification : &#x27; + err); }
+}
+
+// ===================== OUTILS =====================
+function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+function clean_(v) { v = String(v || &#x27;&#x27;).toLowerCase().trim(); return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? v : &#x27;&#x27;; }
+function safeName_(s) { return String(s).replace(/[\\\/:*?&quot;&lt;&gt;|\r\n]+/g, &#x27;-&#x27;).replace(/\s+/g, &#x27;_&#x27;).slice(0, 80); }
+function parseDate_(v) { if (!v) return null; var d = new Date(typeof v === &#x27;number&#x27; ? (v &lt; 1e12 ? v * 1000 : v) : String(v).replace(&#x27; &#x27;, &#x27;T&#x27;)); return isNaN(d.getTime()) ? null : d; }
+/** Lettre de colonne depuis un intitulé. */
+function letter_(h) {
+  var n = colIndex_(h), l = &#x27;&#x27;;
+  while (n &gt; 0) { var m = (n - 1) % 26; l = String.fromCharCode(65 + m) + l; n = Math.floor((n - m) / 26); }
+  return l;
+}
+function colRange_(h) { var l = letter_(h); return &quot;&#x27;&quot; + SHEET_SUIVI + &quot;&#x27;!&quot; + l + &#x27;2:&#x27; + l; }
+
+// ===================== INITIALISATION =====================
+function setup() {
+  setup_();
+  SpreadsheetApp.getActiveSpreadsheet().toast(&#x27;Onglets Suivi, Journal, Tableau de bord et Parcours prêts.&#x27;);
+}
+
+function setup_() {
+  var sh = sheet_(SHEET_SUIVI);
+  sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#355D8D&#x27;).setFontColor(&#x27;#ffffff&#x27;).setWrap(true);
+  sh.setFrozenRows(1); sh.setFrozenColumns(2);
+  DATE_COLS.forEach(function (h) { sh.getRange(2, colIndex_(h), 5000, 1).setNumberFormat(&#x27;dd/MM/yyyy HH:mm&#x27;); });
+  sh.setColumnWidths(1, HEADERS.length, 130);
+  sh.setColumnWidth(colIndex_(&#x27;Statut&#x27;), 270);
+  sh.setColumnWidth(colIndex_(&#x27;Canal&#x27;), 210);
+  sh.getRange(2, colIndex_(&#x27;Commentaire partenaire&#x27;), 5000, 1).setWrap(true);
+  log_(&#x27;SETUP&#x27;, &#x27;&#x27;, &#x27;Initialisation &#x27; + VERSION);
+  buildDashboard_();
+  buildParcours_();
+  SpreadsheetApp.getActiveSpreadsheet().setActiveSheet(sh);
+}
+
+// ===================== TABLEAU DE BORD =====================
+function buildDashboard_() {
+  var d = sheet_(SHEET_KPI); d.clear();
+  var K = &quot;&#x27;&quot; + SHEET_SUIVI + &quot;&#x27;!&quot;;
+  var B = function (n) { return &#x27;$B$&#x27; + n; };
+  var rows = [
+    [&#x27;KPI régie publicitaire Callo 2027 — &#x27; + VERSION, &#x27;&#x27;, &#x27;&#x27;],
+    [&#x27;Indicateur&#x27;, &#x27;Valeur&#x27;, &#x27;Taux&#x27;],
+    [&#x27;Contacts suivis&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;E-mail&#x27;) + &#x27;)&#x27;, &#x27;&#x27;],
+    [&#x27;E-mails envoyés&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date envoi e-mail&#x27;) + &#x27;)&#x27;, &#x27;&#x27;],
+    [&#x27;E-mails ouverts&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date ouverture e-mail&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B5/B4,0)&#x27;],
+    [&#x27;Clics e-mail&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date clic e-mail&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B6/B4,0)&#x27;],
+    [&#x27;Visites du site&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date 1re visite site&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B7/B3,0)&#x27;],
+    [&#x27;Réponses au formulaire&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date réponse formulaire&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B8/B3,0)&#x27;],
+    [&#x27;  dont Oui&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Oui&quot;)&#x27;, &#x27;=IFERROR(B9/B8,0)&#x27;],
+    [&#x27;  dont Peut-être&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Peut-être&quot;)&#x27;, &#x27;=IFERROR(B10/B8,0)&#x27;],
+    [&#x27;  dont Non&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Non&quot;)&#x27;, &#x27;=IFERROR(B11/B8,0)&#x27;],
+    [&#x27;Bons de commande téléchargés&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date DL bon de commande&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B12/B8,0)&#x27;],
+    [&#x27;Bons de commande reçus&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date réception bon de commande&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B13/B8,0)&#x27;],
+    [&#x27;Encarts reçus&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date réception encart&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B14/B8,0)&#x27;],
+    [&#x27;Logos reçus&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date réception logo&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B15/B8,0)&#x27;],
+    [&#x27;BAT envoyés&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date envoi BAT (manuel)&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B16/B13,0)&#x27;],
+    [&#x27;BAT validés&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date validation BAT (manuel)&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B17/B16,0)&#x27;],
+    [&#x27;Dossiers complets (BC + encart + logo)&#x27;, &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;Date réception bon de commande&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Date réception encart&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Date réception logo&#x27;) + &#x27;,&quot;&lt;&gt;&quot;)&#x27;, &#x27;&#x27;],
+    [&#x27;Chiffre d\&#x27;affaires net saisi (€)&#x27;, &#x27;=SUM(&#x27; + colRange_(&#x27;Montant net € (manuel)&#x27;) + &#x27;)&#x27;, &#x27;&#x27;],
+    [&#x27;Panier moyen (€)&#x27;, &#x27;=IFERROR(B19/B13,0)&#x27;, &#x27;&#x27;],
+    [&#x27;Score engagement moyen&#x27;, &#x27;=IFERROR(AVERAGE(&#x27; + colRange_(&#x27;Score engagement&#x27;) + &#x27;),0)&#x27;, &#x27;&#x27;],
+    [&#x27;Délai moyen clic → réponse (h)&#x27;, &#x27;=IFERROR(AVERAGE(&#x27; + colRange_(&#x27;Délai clic→réponse (h)&#x27;) + &#x27;),0)&#x27;, &#x27;&#x27;],
+    [&#x27;Délai moyen réponse → BC (j)&#x27;, &#x27;=IFERROR(AVERAGE(&#x27; + colRange_(&#x27;Délai réponse→BC (j)&#x27;) + &#x27;),0)&#x27;, &#x27;&#x27;],
+    [&#x27;Délai moyen réception → BAT (j)&#x27;, &#x27;=IFERROR(AVERAGE(&#x27; + colRange_(&#x27;Délai documents→BAT (j)&#x27;) + &#x27;),0)&#x27;, &#x27;&#x27;],
+    [&#x27;Réservation possible jusqu\&#x27;au&#x27;, &#x27;01/12/2026&#x27;, &#x27;&#x27;],
+    [&#x27;Parution Actualycée&#x27;, &#x27;18/12/2026&#x27;, &#x27;&#x27;],
+    [&#x27;Durée moyenne de visite (s)&#x27;, &#x27;=IFERROR(ROUND(AVERAGE(&#x27; + colRange_(&#x27;Durée de visite (s)&#x27;) + &#x27;),0),0)&#x27;, &#x27;&#x27;],
+    [&#x27;Visiteurs sur mobile&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Appareil&#x27;) + &#x27;,&quot;Mobile&quot;)&#x27;, &#x27;=IFERROR(B28/B3,0)&#x27;],
+    [&#x27;Visiteurs sur ordinateur&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Appareil&#x27;) + &#x27;,&quot;Ordinateur&quot;)&#x27;, &#x27;=IFERROR(B29/B3,0)&#x27;],
+    [&#x27;Connexions enregistrées&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Connexion (jour/heure)&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B30/B3,0)&#x27;],
+    [&#x27;BAT signés reçus&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date réception BAT signé&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B31/B16,0)&#x27;],
+    [&#x27;Dossiers avec BC dans Drive&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Fichiers présents dans Drive&#x27;) + &#x27;,&quot;*BC ✓*&quot;)&#x27;, &#x27;=IFERROR(B32/B3,0)&#x27;],
+    [&#x27;Dossiers avec BAT dans Drive&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Fichiers présents dans Drive&#x27;) + &#x27;,&quot;*BAT ✓*&quot;)&#x27;, &#x27;=IFERROR(B33/B3,0)&#x27;]
+  ];
+  d.getRange(1, 1, rows.length, 3).setFormulas(rows);
+  d.getRange(&#x27;A1&#x27;).setFontSize(14).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#355D8D&#x27;);
+  d.getRange(&#x27;A2:C2&#x27;).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#355D8D&#x27;).setFontColor(&#x27;#ffffff&#x27;);
+  d.getRange(&#x27;C5:C6&#x27;).setNumberFormat(&#x27;0.0%&#x27;);   // ouverture / clic / envoyés
+  d.getRange(&#x27;C7:C17&#x27;).setNumberFormat(&#x27;0.0%&#x27;);  // conversions
+  d.getRange(&#x27;B19:B20&#x27;).setNumberFormat(&#x27;# ##0 &quot;€&quot;&#x27;);
+  d.getRange(&#x27;B22:B24&#x27;).setNumberFormat(&#x27;0.0&#x27;);
+  d.getRange(&#x27;B27&#x27;).setNumberFormat(&#x27;0&#x27;);
+  d.getRange(&#x27;C28:C30&#x27;).setNumberFormat(&#x27;0.0%&#x27;);
+  d.getRange(&#x27;C31:C33&#x27;).setNumberFormat(&#x27;0.0%&#x27;);
+  d.setColumnWidth(1, 330); d.setColumnWidth(2, 130); d.setColumnWidth(3, 110);
+  d.getRange(&#x27;A3:C3&#x27;).setFontWeight(&#x27;bold&#x27;);
+  d.getRange(&#x27;A26:C27&#x27;).setFontColor(&#x27;#4a5b70&#x27;);
+  var notes = d.getRange(&#x27;E1&#x27;);
+  notes.setValue(&#x27;Lecture :\n· Taux ligne 5 = ouvertures / envoyés (taux d\&#x27;ouverture réel).\n· Taux ligne 6 = clics / envoyés (taux de clic réel).\n· Lignes 7 à 17 : conversion par rapport à l\&#x27;étape précédente, pas au total des contacts.\n· Délais : renseignés automatiquement à chaque événement.\n· Les colonnes « (manuel) » se saisissent à la main.&#x27;);
+  notes.setWrap(true).setVerticalAlignment(&#x27;top&#x27;).setFontSize(10).setFontColor(&#x27;#4a5b70&#x27;);
+  d.setColumnWidth(5, 380);
+}
+
+// ===================== PARCOURS PARTENAIRE =====================
+function buildParcours_() {
+  var p = sheet_(SHEET_PARCOURS); p.clear();
+  var K = &quot;&#x27;&quot; + SHEET_SUIVI + &quot;&#x27;!&quot;;
+
+  // --- 1. Entonnoir ---
+  var funnel = [
+    [&#x27;ANALYSE DU PARCOURS PARTENAIRE — &#x27; + VERSION, &#x27;&#x27;, &#x27;&#x27;, &#x27;&#x27;],
+    [&#x27;Étape&#x27;, &#x27;Nombre&#x27;, &#x27;Conversion depuis l\&#x27;étape précédente&#x27;, &#x27;Commentaire&#x27;],
+    [&#x27;1 · E-mail envoyé&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date envoi e-mail&#x27;) + &#x27;)&#x27;, &#x27;&#x27;, &#x27;Base de la campagne&#x27;],
+    [&#x27;2 · E-mail ouvert&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date ouverture e-mail&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B4/B3,0)&#x27;, &#x27;Ouvertures fiabilisées par les webhooks Brevo&#x27;],
+    [&#x27;3 · Lien cliqué&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date clic e-mail&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B5/B4,0)&#x27;, &#x27;Le clic est le vrai signal d\&#x27;intérêt&#x27;],
+    [&#x27;4 · Site visité&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date 1re visite site&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B6/B5,0)&#x27;, &#x27;Écart clic/visite = problème de page&#x27;],
+    [&#x27;5 · Formulaire rempli&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date réponse formulaire&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B7/B6,0)&#x27;, &#x27;Écart visite/réponse = friction du formulaire&#x27;],
+    [&#x27;6 · Réponse « Oui »&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Oui&quot;)&#x27;, &#x27;=IFERROR(B8/B7,0)&#x27;, &#x27;&#x27;],
+    [&#x27;7 · Bon de commande téléchargé&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date DL bon de commande&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B9/B8,0)&#x27;, &#x27;&#x27;],
+    [&#x27;8 · Bon de commande reçu&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date réception bon de commande&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B10/B9,0)&#x27;, &#x27;Écart téléchargé/reçu = frein de signature&#x27;],
+    [&#x27;9 · Dossier complet&#x27;, &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;Date réception bon de commande&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Date réception encart&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Date réception logo&#x27;) + &#x27;,&quot;&lt;&gt;&quot;)&#x27;, &#x27;=IFERROR(B11/B10,0)&#x27;, &#x27;BC + encart + logo&#x27;],
+    [&#x27;10 · BAT validé&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date validation BAT (manuel)&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B12/B11,0)&#x27;, &#x27;Accord donné sur le bon à tirer&#x27;],
+    [&#x27;11 · BAT signé reçu&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date réception BAT signé&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B13/B12,0)&#x27;, &#x27;Document signé archivé dans le Drive du partenaire&#x27;]
+  ];
+  p.getRange(1, 1, funnel.length, 4).setFormulas(funnel);
+  p.getRange(&#x27;A1&#x27;).setFontSize(14).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#355D8D&#x27;);
+  p.getRange(&#x27;A2:D2&#x27;).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#355D8D&#x27;).setFontColor(&#x27;#ffffff&#x27;);
+  p.getRange(&#x27;C3:C14&#x27;).setNumberFormat(&#x27;0.0%&#x27;);
+  p.getRange(&#x27;A3:A14&#x27;).setFontWeight(&#x27;bold&#x27;);
+
+  // --- 2. Provenance ---
+  var r0 = 16;
+  p.getRange(r0, 1, 1, 6).setValues([[&#x27;PROVENANCE DES CONTACTS&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;&#x27;]]);
+  p.getRange(r0, 1, 1, 6).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#D4111F&#x27;);
+  p.getRange(r0 + 1, 1, 1, 6).setValues([[&#x27;Canal&#x27;, &#x27;Contacts&#x27;, &#x27;Réponses&#x27;, &#x27;Taux de réponse&#x27;, &#x27;dont Oui&#x27;, &#x27;CA net (€)&#x27;]]);
+  p.getRange(r0 + 1, 1, 1, 6).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#355D8D&#x27;).setFontColor(&#x27;#ffffff&#x27;);
+
+  var canaux = Object.keys(CANAUX).map(function (k) { return CANAUX[k]; });
+  canaux.push(&#x27;Site direct / recherche&#x27;);
+  var vus = {}, ordre = [];
+  canaux.forEach(function (c) { if (!vus[c]) { vus[c] = 1; ordre.push(c); } });
+
+  var lignes = [];
+  ordre.forEach(function (c, i) {
+    var r = r0 + 2 + i;
+    var cr = colRange_(&#x27;Canal&#x27;);
+    var rr = colRange_(&#x27;Date réponse formulaire&#x27;);
+    lignes.push([
+      c,
+      &#x27;=COUNTIF(&#x27; + cr + &#x27;,$A&#x27; + r + &#x27;)&#x27;,
+      &#x27;=COUNTIFS(&#x27; + cr + &#x27;,$A&#x27; + r + &#x27;,&#x27; + rr + &#x27;,&quot;&lt;&gt;&quot;)&#x27;,
+      &#x27;=IFERROR(C&#x27; + r + &#x27;/B&#x27; + r + &#x27;,0)&#x27;,
+      &#x27;=COUNTIFS(&#x27; + cr + &#x27;,$A&#x27; + r + &#x27;,&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Oui&quot;)&#x27;,
+      &#x27;=SUMIF(&#x27; + cr + &#x27;,$A&#x27; + r + &#x27;,&#x27; + colRange_(&#x27;Montant net € (manuel)&#x27;) + &#x27;)&#x27;
+    ]);
+  });
+  var rInconnu = r0 + 2 + ordre.length;
+  lignes.push([&#x27;(non renseigné)&#x27;,
+    &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;)&#x27;,
+    &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Date réponse formulaire&#x27;) + &#x27;,&quot;&lt;&gt;&quot;)&#x27;,
+    &#x27;=IFERROR(C&#x27; + rInconnu + &#x27;/B&#x27; + rInconnu + &#x27;,0)&#x27;,
+    &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Oui&quot;)&#x27;,
+    &#x27;=SUMIF(&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Montant net € (manuel)&#x27;) + &#x27;)&#x27;]);
+
+  p.getRange(r0 + 2, 1, lignes.length, 6).setFormulas(lignes);
+  p.getRange(r0 + 2, 4, lignes.length, 1).setNumberFormat(&#x27;0.0%&#x27;);
+  p.getRange(r0 + 2, 6, lignes.length, 1).setNumberFormat(&#x27;# ##0 &quot;€&quot;&#x27;);
+  var rTot = r0 + 2 + lignes.length;
+  p.getRange(rTot, 1, 1, 6).setFormulas([[&#x27;TOTAL&#x27;, &#x27;=SUM(B&#x27; + (r0 + 2) + &#x27;:B&#x27; + (rTot - 1) + &#x27;)&#x27;,
+    &#x27;=SUM(C&#x27; + (r0 + 2) + &#x27;:C&#x27; + (rTot - 1) + &#x27;)&#x27;, &#x27;=IFERROR(C&#x27; + rTot + &#x27;/B&#x27; + rTot + &#x27;,0)&#x27;,
+    &#x27;=SUM(E&#x27; + (r0 + 2) + &#x27;:E&#x27; + (rTot - 1) + &#x27;)&#x27;, &#x27;=SUM(F&#x27; + (r0 + 2) + &#x27;:F&#x27; + (rTot - 1) + &#x27;)&#x27;]]);
+  p.getRange(rTot, 1, 1, 6).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#F4F6F1&#x27;);
+  p.getRange(rTot, 4).setNumberFormat(&#x27;0.0%&#x27;);
+  p.getRange(rTot, 6).setNumberFormat(&#x27;# ##0 &quot;€&quot;&#x27;);
+
+  // --- 3. Délais (expérience partenaire) ---
+  var r1 = rTot + 3;
+  p.getRange(r1, 1, 1, 4).setValues([[&#x27;EXPÉRIENCE PARTENAIRE — DÉLAIS MESURÉS&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;&#x27;]]);
+  p.getRange(r1, 1, 1, 4).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#D4111F&#x27;);
+  p.getRange(r1 + 1, 1, 1, 4).setValues([[&#x27;Jalon&#x27;, &#x27;Moyenne&#x27;, &#x27;Médiane&#x27;, &#x27;Cible&#x27;]]);
+  p.getRange(r1 + 1, 1, 1, 4).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#355D8D&#x27;).setFontColor(&#x27;#ffffff&#x27;);
+  var delais = [
+    [&#x27;Clic e-mail → réponse (heures)&#x27;, colRange_(&#x27;Délai clic→réponse (h)&#x27;), &#x27;moins de 24 h&#x27;],
+    [&#x27;Réponse → bon de commande reçu (jours)&#x27;, colRange_(&#x27;Délai réponse→BC (j)&#x27;), &#x27;moins de 7 j&#x27;],
+    [&#x27;BC → encart + logo reçus (jours)&#x27;, colRange_(&#x27;Délai BC→documents (j)&#x27;), &#x27;moins de 5 j&#x27;],
+    [&#x27;Réception → BAT envoyé (jours)&#x27;, colRange_(&#x27;Délai documents→BAT (j)&#x27;), &#x27;3 j ouvrés max&#x27;]
+  ];
+  var dl = [];
+  delais.forEach(function (d, i) {
+    var r = r1 + 2 + i;
+    dl.push([d[0], &#x27;=IFERROR(ROUND(AVERAGE(&#x27; + d[1] + &#x27;),1),0)&#x27;, &#x27;=IFERROR(MEDIAN(&#x27; + d[1] + &#x27;),0)&#x27;, d[2]]);
+  });
+  p.getRange(r1 + 2, 1, dl.length, 4).setFormulas(dl);
+  p.getRange(r1 + 2, 2, dl.length, 2).setNumberFormat(&#x27;0.0&#x27;);
+
+  // --- 4. Points de friction ---
+  var r2 = r1 + 2 + dl.length + 2;
+  var fretes = [
+    [&#x27;POINTS DE FRICTION À SURVEILLER&#x27;, &#x27;&#x27;, &#x27;&#x27;],
+    [&#x27;Étape la plus faible&#x27;, &#x27;=INDEX(A4:A14,MATCH(MIN(C4:C14),C4:C14,0))&#x27;, &#x27;&#x27;],
+    [&#x27;Taux de cette étape&#x27;, &#x27;=MIN(C4:C14)&#x27;, &#x27;&#x27;],
+    [&#x27;Contacts bloqués à cette étape&#x27;, &#x27;=INDEX(B4:B14,MATCH(MIN(C4:C14),C4:C14,0))-INDEX(B3:B13,MATCH(MIN(C4:C14),C4:C14,0))&#x27;, &#x27;&#x27;],
+    [&#x27;Réponses « Non »&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Non&quot;)&#x27;, &#x27;&#x27;],
+    [&#x27;Contacts sans aucune activité&#x27;, &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;Date envoi e-mail&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Date 1re visite site&#x27;) + &#x27;,&quot;&quot;)&#x27;, &#x27;&#x27;]
+  ];
+  p.getRange(r2, 1, fretes.length, 3).setFormulas(fretes);
+  p.getRange(r2, 1, 1, 3).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#D4111F&#x27;);
+  p.getRange(r2 + 3, 2).setNumberFormat(&#x27;0.0%&#x27;);
+  p.getRange(r2 + 6, 1, 1, 3).setFontColor(&#x27;#4a5b70&#x27;);
+
+  // --- 5. Appareils et navigateurs ---
+  var r3 = r2 + 8;
+  p.getRange(r3, 1, 1, 3).setValues([[&#x27;APPAREILS ET NAVIGATEURS&#x27;, &#x27;&#x27;, &#x27;&#x27;]]);
+  p.getRange(r3, 1, 1, 3).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#D4111F&#x27;);
+  p.getRange(r3 + 1, 1, 1, 3).setValues([[&#x27;Catégorie&#x27;, &#x27;Contacts&#x27;, &#x27;% des contacts&#x27;]]);
+  p.getRange(r3 + 1, 1, 1, 3).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#355D8D&#x27;).setFontColor(&#x27;#ffffff&#x27;);
+  var app = [[&#x27;Mobile&#x27;, &#x27;Mobile&#x27;], [&#x27;Ordinateur&#x27;, &#x27;Ordinateur&#x27;], [&#x27;Tablette&#x27;, &#x27;Tablette&#x27;]];
+  var appRows = [];
+  app.forEach(function (a, i) {
+    var r = r3 + 2 + i;
+    appRows.push([a[0], &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Appareil&#x27;) + &#x27;,$A&#x27; + r + &#x27;)&#x27;, &#x27;=IFERROR(B&#x27; + r + &#x27;/$B$3,0)&#x27;]);
+  });
+  p.getRange(r3 + 2, 1, appRows.length, 3).setFormulas(appRows);
+  p.getRange(r3 + 2, 3, appRows.length, 1).setNumberFormat(&#x27;0.0%&#x27;);
+
+  var navs = [&#x27;Chrome&#x27;, &#x27;Safari&#x27;, &#x27;Firefox&#x27;, &#x27;Edge&#x27;, &#x27;Opera&#x27;, &#x27;Samsung&#x27;, &#x27;Autre&#x27;];
+  var r4 = r3 + 2 + appRows.length + 1;
+  p.getRange(r4, 1, 1, 3).setValues([[&#x27;Navigateur&#x27;, &#x27;Contacts&#x27;, &#x27;% des contacts&#x27;]]);
+  p.getRange(r4, 1, 1, 3).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#355D8D&#x27;).setFontColor(&#x27;#ffffff&#x27;);
+  var navRows = [];
+  navs.forEach(function (n, i) {
+    var r = r4 + 1 + i;
+    navRows.push([n, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Navigateur&#x27;) + &#x27;,&quot;*&#x27; + n + &#x27;*&quot;)&#x27;, &#x27;=IFERROR(B&#x27; + r + &#x27;/$B$3,0)&#x27;]);
+  });
+  p.getRange(r4 + 1, 1, navRows.length, 3).setFormulas(navRows);
+  p.getRange(r4 + 1, 3, navRows.length, 1).setNumberFormat(&#x27;0.0%&#x27;);
+
+  p.setColumnWidth(1, 330); p.setColumnWidth(2, 110); p.setColumnWidth(3, 220); p.setColumnWidth(4, 300);
+  p.getRange(&#x27;E1&#x27;).setValue(&#x27;Comment lire cet onglet\n\n1. L\&#x27;entonnoir montre où les partenaires s\&#x27;arrêtent.\n2. La provenance compare les canaux : un canal qui amène des visites mais pas de réponses doit être réécrit.\n3. Les délais mesurent la promesse « 3 jours ouvrés pour le BAT ». Au-delà, le partenaire décroche.\n4. Les points de friction sont recalculés à chaque ouverture du fichier.&#x27;);
+  p.getRange(&#x27;E1&#x27;).setWrap(true).setVerticalAlignment(&#x27;top&#x27;).setFontSize(10).setFontColor(&#x27;#4a5b70&#x27;);
+  p.setColumnWidth(5, 380);
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu(&#x27;Régie Callo&#x27;)
+    .addItem(&#x27;Initialiser / réparer les feuilles&#x27;, &#x27;setup&#x27;)
+    .addItem(&#x27;Recalculer tous les statuts et délais&#x27;, &#x27;recomputeAll&#x27;)
+    .addItem(&#x27;Recalculer le parcours et le tableau de bord&#x27;, &#x27;rebuildReports&#x27;)
+    .addItem(&#x27;Préparer et partager le dossier Drive&#x27;, &#x27;preparerDossiers&#x27;)
+    .addItem(&#x27;Contrôler les fichiers réellement présents dans Drive&#x27;, &#x27;controlerDrive&#x27;)
+    .addToUi();
+}
+
+function recomputeAll() {
+  var sh = sheet_(SHEET_SUIVI), n = sh.getLastRow();
+  for (var r = 2; r &lt;= n; r++) { analyse_(r); set_(r, &#x27;Statut&#x27;, computeStatus_(r)); }
+  SpreadsheetApp.getActiveSpreadsheet().toast(&#x27;Statuts et délais recalculés (&#x27; + Math.max(0, n - 1) + &#x27; contacts).&#x27;);
+}
+
+function rebuildReports() {
+  buildDashboard_();
+  buildParcours_();
+  SpreadsheetApp.getActiveSpreadsheet().toast(&#x27;Tableau de bord et Parcours régénérés.&#x27;);
+}
+</textarea>
+    <p class="note" id="msg"></p>
+    <ol>
+      <li>Google Sheet → <b>Extensions → Apps Script</b></li>
+      <li>Dans l'éditeur : <b>Ctrl+A</b> puis <b>Suppr</b> (tout effacer)</li>
+      <li><b>Ctrl+V</b> pour coller</li>
+      <li><b>Ctrl+S</b> pour enregistrer</li>
+      <li>Exécuter la fonction <b>setup</b></li>
+    </ol>
+  </div>
+</div>
+<script>
+var CODE = document.getElementById('code');
+var MSG = document.getElementById('msg');
+document.getElementById('copier').addEventListener('click', function () {
+  var t = CODE.value;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(function () {
+      MSG.className = 'note ok'; MSG.textContent = '✓ Code copié (' + t.length + ' caractères). Collez dans Apps Script.';
+    }).catch(function () { CODE.select(); document.execCommand('copy'); MSG.className = 'note ok'; MSG.textContent = '✓ Code copié'; });
+  } else {
+    CODE.focus(); CODE.select(); document.execCommand('copy');
+    MSG.className = 'note ok'; MSG.textContent = '✓ Code copié';
+  }
+});
+document.getElementById('telecharger').addEventListener('click', function () {
+  var blob = new Blob([CODE.value], { type: 'text/plain;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'Code.gs';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+});
+</script>
+</body></html>
