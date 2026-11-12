@@ -576,6 +576,28 @@ function setup_() {
   SpreadsheetApp.getActiveSpreadsheet().setActiveSheet(sh);
 }
 
+/**
+ * Écrit un tableau en distinguant les textes des formules.
+ * setFormulas() interpretait TOUT comme une formule : les libellés
+ * (&quot;Indicateur&quot;, &quot;1 · E-mail envoyé&quot;) ressortaient en #NAME? / #ERROR!.
+ */
+function ecrireTableau_(sh, ligne, colonne, lignes) {
+  var valeurs = lignes.map(function (r) {
+    return r.map(function (c) {
+      return (typeof c === &#x27;string&#x27; &amp;&amp; c.charAt(0) === &#x27;=&#x27;) ? &#x27;&#x27; : c;
+    });
+  });
+  sh.getRange(ligne, colonne, lignes.length, lignes[0].length).setValues(valeurs);
+  for (var i = 0; i &lt; lignes.length; i++) {
+    for (var j = 0; j &lt; lignes[i].length; j++) {
+      var c = lignes[i][j];
+      if (typeof c === &#x27;string&#x27; &amp;&amp; c.charAt(0) === &#x27;=&#x27;) {
+        sh.getRange(ligne + i, colonne + j).setFormula(c);
+      }
+    }
+  }
+}
+
 // ===================== TABLEAU DE BORD =====================
 function buildDashboard_() {
   var d = sheet_(SHEET_KPI); d.clear();
@@ -616,7 +638,7 @@ function buildDashboard_() {
     [&#x27;Dossiers avec BC dans Drive&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Fichiers présents dans Drive&#x27;) + &#x27;,&quot;*BC ✓*&quot;)&#x27;, &#x27;=IFERROR(B32/B3,0)&#x27;],
     [&#x27;Dossiers avec BAT dans Drive&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Fichiers présents dans Drive&#x27;) + &#x27;,&quot;*BAT ✓*&quot;)&#x27;, &#x27;=IFERROR(B33/B3,0)&#x27;]
   ];
-  d.getRange(1, 1, rows.length, 3).setFormulas(rows);
+  ecrireTableau_(d, 1, 1, rows);
   d.getRange(&#x27;A1&#x27;).setFontSize(14).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#355D8D&#x27;);
   d.getRange(&#x27;A2:C2&#x27;).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#355D8D&#x27;).setFontColor(&#x27;#ffffff&#x27;);
   d.getRange(&#x27;C5:C6&#x27;).setNumberFormat(&#x27;0.0%&#x27;);   // ouverture / clic / envoyés
@@ -656,7 +678,7 @@ function buildParcours_() {
     [&#x27;10 · BAT validé&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date validation BAT (manuel)&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B12/B11,0)&#x27;, &#x27;Accord donné sur le bon à tirer&#x27;],
     [&#x27;11 · BAT signé reçu&#x27;, &#x27;=COUNTA(&#x27; + colRange_(&#x27;Date réception BAT signé&#x27;) + &#x27;)&#x27;, &#x27;=IFERROR(B13/B12,0)&#x27;, &#x27;Document signé archivé dans le Drive du partenaire&#x27;]
   ];
-  p.getRange(1, 1, funnel.length, 4).setFormulas(funnel);
+  ecrireTableau_(p, 1, 1, funnel);
   p.getRange(&#x27;A1&#x27;).setFontSize(14).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#355D8D&#x27;);
   p.getRange(&#x27;A2:D2&#x27;).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#355D8D&#x27;).setFontColor(&#x27;#ffffff&#x27;);
   p.getRange(&#x27;C3:C14&#x27;).setNumberFormat(&#x27;0.0%&#x27;);
@@ -696,11 +718,11 @@ function buildParcours_() {
     &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;E-mail&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Oui&quot;)&#x27;,
     &#x27;=SUMIF(&#x27; + colRange_(&#x27;Canal&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Montant net € (manuel)&#x27;) + &#x27;)&#x27;]);
 
-  p.getRange(r0 + 2, 1, lignes.length, 6).setFormulas(lignes);
+  ecrireTableau_(p, r0 + 2, 1, lignes);
   p.getRange(r0 + 2, 4, lignes.length, 1).setNumberFormat(&#x27;0.0%&#x27;);
   p.getRange(r0 + 2, 6, lignes.length, 1).setNumberFormat(&#x27;# ##0 &quot;€&quot;&#x27;);
   var rTot = r0 + 2 + lignes.length;
-  p.getRange(rTot, 1, 1, 6).setFormulas([[&#x27;TOTAL&#x27;, &#x27;=SUM(B&#x27; + (r0 + 2) + &#x27;:B&#x27; + (rTot - 1) + &#x27;)&#x27;,
+  ecrireTableau_(p, rTot, 1, [[&#x27;TOTAL&#x27;, &#x27;=SUM(B&#x27; + (r0 + 2) + &#x27;:B&#x27; + (rTot - 1) + &#x27;)&#x27;,
     &#x27;=SUM(C&#x27; + (r0 + 2) + &#x27;:C&#x27; + (rTot - 1) + &#x27;)&#x27;, &#x27;=IFERROR(C&#x27; + rTot + &#x27;/B&#x27; + rTot + &#x27;,0)&#x27;,
     &#x27;=SUM(E&#x27; + (r0 + 2) + &#x27;:E&#x27; + (rTot - 1) + &#x27;)&#x27;, &#x27;=SUM(F&#x27; + (r0 + 2) + &#x27;:F&#x27; + (rTot - 1) + &#x27;)&#x27;]]);
   p.getRange(rTot, 1, 1, 6).setFontWeight(&#x27;bold&#x27;).setBackground(&#x27;#F4F6F1&#x27;);
@@ -724,7 +746,7 @@ function buildParcours_() {
     var r = r1 + 2 + i;
     dl.push([d[0], &#x27;=IFERROR(ROUND(AVERAGE(&#x27; + d[1] + &#x27;),1),0)&#x27;, &#x27;=IFERROR(MEDIAN(&#x27; + d[1] + &#x27;),0)&#x27;, d[2]]);
   });
-  p.getRange(r1 + 2, 1, dl.length, 4).setFormulas(dl);
+  ecrireTableau_(p, r1 + 2, 1, dl);
   p.getRange(r1 + 2, 2, dl.length, 2).setNumberFormat(&#x27;0.0&#x27;);
 
   // --- 4. Points de friction ---
@@ -737,7 +759,7 @@ function buildParcours_() {
     [&#x27;Réponses « Non »&#x27;, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Intérêt&#x27;) + &#x27;,&quot;Non&quot;)&#x27;, &#x27;&#x27;],
     [&#x27;Contacts sans aucune activité&#x27;, &#x27;=COUNTIFS(&#x27; + colRange_(&#x27;E-mail&#x27;) + &#x27;,&quot;&lt;&gt;&quot;,&#x27; + colRange_(&#x27;Date envoi e-mail&#x27;) + &#x27;,&quot;&quot;,&#x27; + colRange_(&#x27;Date 1re visite site&#x27;) + &#x27;,&quot;&quot;)&#x27;, &#x27;&#x27;]
   ];
-  p.getRange(r2, 1, fretes.length, 3).setFormulas(fretes);
+  ecrireTableau_(p, r2, 1, fretes);
   p.getRange(r2, 1, 1, 3).setFontWeight(&#x27;bold&#x27;).setFontColor(&#x27;#D4111F&#x27;);
   p.getRange(r2 + 3, 2).setNumberFormat(&#x27;0.0%&#x27;);
   p.getRange(r2 + 6, 1, 1, 3).setFontColor(&#x27;#4a5b70&#x27;);
@@ -754,7 +776,7 @@ function buildParcours_() {
     var r = r3 + 2 + i;
     appRows.push([a[0], &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Appareil&#x27;) + &#x27;,$A&#x27; + r + &#x27;)&#x27;, &#x27;=IFERROR(B&#x27; + r + &#x27;/$B$3,0)&#x27;]);
   });
-  p.getRange(r3 + 2, 1, appRows.length, 3).setFormulas(appRows);
+  ecrireTableau_(p, r3 + 2, 1, appRows);
   p.getRange(r3 + 2, 3, appRows.length, 1).setNumberFormat(&#x27;0.0%&#x27;);
 
   var navs = [&#x27;Chrome&#x27;, &#x27;Safari&#x27;, &#x27;Firefox&#x27;, &#x27;Edge&#x27;, &#x27;Opera&#x27;, &#x27;Samsung&#x27;, &#x27;Autre&#x27;];
@@ -766,7 +788,7 @@ function buildParcours_() {
     var r = r4 + 1 + i;
     navRows.push([n, &#x27;=COUNTIF(&#x27; + colRange_(&#x27;Navigateur&#x27;) + &#x27;,&quot;*&#x27; + n + &#x27;*&quot;)&#x27;, &#x27;=IFERROR(B&#x27; + r + &#x27;/$B$3,0)&#x27;]);
   });
-  p.getRange(r4 + 1, 1, navRows.length, 3).setFormulas(navRows);
+  ecrireTableau_(p, r4 + 1, 1, navRows);
   p.getRange(r4 + 1, 3, navRows.length, 1).setNumberFormat(&#x27;0.0%&#x27;);
 
   p.setColumnWidth(1, 330); p.setColumnWidth(2, 110); p.setColumnWidth(3, 220); p.setColumnWidth(4, 300);

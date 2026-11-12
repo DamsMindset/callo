@@ -36,7 +36,7 @@ Version des fichiers : script KPI **v2.0**, site **4 pages**, gabarit Brevo **v2
 | Images de l'email accessibles en HTTP | **4 / 4 en 200** |
 | Polices, CSS, JS, PDF, bons de commande sur le serveur | **200** sur les 16 ressources testées |
 | Rendu ordinateur (1440 px) et mobile (390 / 375 px) | **sans débordement** |
-| Colonnes de la feuille | **55 colonnes**, toutes nommées une seule fois |
+| Colonnes de la feuille | **54 colonnes**, toutes nommées une seule fois |
 | Formules du tableau de bord | **lettres de colonne vérifiées une à une** |
 | Script exécuté en simulation (visite, réponse, clic, rebond, durée, dépôt, BAT, jeton invalide) | **7 scénarios passés** |
 | Cumul du temps de visite | **vérifié** (42 s + 30 s = 72 s) |
@@ -83,7 +83,7 @@ Version des fichiers : script KPI **v2.0**, site **4 pages**, gabarit Brevo **v2
 - [ ] Inscription du traitement auprès du référent RGPD de l'établissement
 - [ ] Bouton « Se désinscrire » testé
 
-## 7. À vérifier — suivi (onglet Suivi, 55 colonnes)
+## 7. À vérifier — suivi (onglet Suivi, 54 colonnes)
 
 **Identité et campagne** — E-mail, Entreprise, Nom, Prénom, Fonction, Téléphone
 

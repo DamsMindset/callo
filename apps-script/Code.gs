@@ -540,6 +540,28 @@ function setup_() {
   SpreadsheetApp.getActiveSpreadsheet().setActiveSheet(sh);
 }
 
+/**
+ * Écrit un tableau en distinguant les textes des formules.
+ * setFormulas() interpretait TOUT comme une formule : les libellés
+ * ("Indicateur", "1 · E-mail envoyé") ressortaient en #NAME? / #ERROR!.
+ */
+function ecrireTableau_(sh, ligne, colonne, lignes) {
+  var valeurs = lignes.map(function (r) {
+    return r.map(function (c) {
+      return (typeof c === 'string' && c.charAt(0) === '=') ? '' : c;
+    });
+  });
+  sh.getRange(ligne, colonne, lignes.length, lignes[0].length).setValues(valeurs);
+  for (var i = 0; i < lignes.length; i++) {
+    for (var j = 0; j < lignes[i].length; j++) {
+      var c = lignes[i][j];
+      if (typeof c === 'string' && c.charAt(0) === '=') {
+        sh.getRange(ligne + i, colonne + j).setFormula(c);
+      }
+    }
+  }
+}
+
 // ===================== TABLEAU DE BORD =====================
 function buildDashboard_() {
   var d = sheet_(SHEET_KPI); d.clear();
@@ -580,7 +602,7 @@ function buildDashboard_() {
     ['Dossiers avec BC dans Drive', '=COUNTIF(' + colRange_('Fichiers présents dans Drive') + ',"*BC ✓*")', '=IFERROR(B32/B3,0)'],
     ['Dossiers avec BAT dans Drive', '=COUNTIF(' + colRange_('Fichiers présents dans Drive') + ',"*BAT ✓*")', '=IFERROR(B33/B3,0)']
   ];
-  d.getRange(1, 1, rows.length, 3).setFormulas(rows);
+  ecrireTableau_(d, 1, 1, rows);
   d.getRange('A1').setFontSize(14).setFontWeight('bold').setFontColor('#355D8D');
   d.getRange('A2:C2').setFontWeight('bold').setBackground('#355D8D').setFontColor('#ffffff');
   d.getRange('C5:C6').setNumberFormat('0.0%');   // ouverture / clic / envoyés
@@ -620,7 +642,7 @@ function buildParcours_() {
     ['10 · BAT validé', '=COUNTA(' + colRange_('Date validation BAT (manuel)') + ')', '=IFERROR(B12/B11,0)', 'Accord donné sur le bon à tirer'],
     ['11 · BAT signé reçu', '=COUNTA(' + colRange_('Date réception BAT signé') + ')', '=IFERROR(B13/B12,0)', 'Document signé archivé dans le Drive du partenaire']
   ];
-  p.getRange(1, 1, funnel.length, 4).setFormulas(funnel);
+  ecrireTableau_(p, 1, 1, funnel);
   p.getRange('A1').setFontSize(14).setFontWeight('bold').setFontColor('#355D8D');
   p.getRange('A2:D2').setFontWeight('bold').setBackground('#355D8D').setFontColor('#ffffff');
   p.getRange('C3:C14').setNumberFormat('0.0%');
@@ -660,11 +682,11 @@ function buildParcours_() {
     '=COUNTIFS(' + colRange_('E-mail') + ',"<>",' + colRange_('Canal') + ',"",' + colRange_('Intérêt') + ',"Oui")',
     '=SUMIF(' + colRange_('Canal') + ',"",' + colRange_('Montant net € (manuel)') + ')']);
 
-  p.getRange(r0 + 2, 1, lignes.length, 6).setFormulas(lignes);
+  ecrireTableau_(p, r0 + 2, 1, lignes);
   p.getRange(r0 + 2, 4, lignes.length, 1).setNumberFormat('0.0%');
   p.getRange(r0 + 2, 6, lignes.length, 1).setNumberFormat('# ##0 "€"');
   var rTot = r0 + 2 + lignes.length;
-  p.getRange(rTot, 1, 1, 6).setFormulas([['TOTAL', '=SUM(B' + (r0 + 2) + ':B' + (rTot - 1) + ')',
+  ecrireTableau_(p, rTot, 1, [['TOTAL', '=SUM(B' + (r0 + 2) + ':B' + (rTot - 1) + ')',
     '=SUM(C' + (r0 + 2) + ':C' + (rTot - 1) + ')', '=IFERROR(C' + rTot + '/B' + rTot + ',0)',
     '=SUM(E' + (r0 + 2) + ':E' + (rTot - 1) + ')', '=SUM(F' + (r0 + 2) + ':F' + (rTot - 1) + ')']]);
   p.getRange(rTot, 1, 1, 6).setFontWeight('bold').setBackground('#F4F6F1');
@@ -688,7 +710,7 @@ function buildParcours_() {
     var r = r1 + 2 + i;
     dl.push([d[0], '=IFERROR(ROUND(AVERAGE(' + d[1] + '),1),0)', '=IFERROR(MEDIAN(' + d[1] + '),0)', d[2]]);
   });
-  p.getRange(r1 + 2, 1, dl.length, 4).setFormulas(dl);
+  ecrireTableau_(p, r1 + 2, 1, dl);
   p.getRange(r1 + 2, 2, dl.length, 2).setNumberFormat('0.0');
 
   // --- 4. Points de friction ---
@@ -701,7 +723,7 @@ function buildParcours_() {
     ['Réponses « Non »', '=COUNTIF(' + colRange_('Intérêt') + ',"Non")', ''],
     ['Contacts sans aucune activité', '=COUNTIFS(' + colRange_('E-mail') + ',"<>",' + colRange_('Date envoi e-mail') + ',"",' + colRange_('Date 1re visite site') + ',"")', '']
   ];
-  p.getRange(r2, 1, fretes.length, 3).setFormulas(fretes);
+  ecrireTableau_(p, r2, 1, fretes);
   p.getRange(r2, 1, 1, 3).setFontWeight('bold').setFontColor('#D4111F');
   p.getRange(r2 + 3, 2).setNumberFormat('0.0%');
   p.getRange(r2 + 6, 1, 1, 3).setFontColor('#4a5b70');
@@ -718,7 +740,7 @@ function buildParcours_() {
     var r = r3 + 2 + i;
     appRows.push([a[0], '=COUNTIF(' + colRange_('Appareil') + ',$A' + r + ')', '=IFERROR(B' + r + '/$B$3,0)']);
   });
-  p.getRange(r3 + 2, 1, appRows.length, 3).setFormulas(appRows);
+  ecrireTableau_(p, r3 + 2, 1, appRows);
   p.getRange(r3 + 2, 3, appRows.length, 1).setNumberFormat('0.0%');
 
   var navs = ['Chrome', 'Safari', 'Firefox', 'Edge', 'Opera', 'Samsung', 'Autre'];
@@ -730,7 +752,7 @@ function buildParcours_() {
     var r = r4 + 1 + i;
     navRows.push([n, '=COUNTIF(' + colRange_('Navigateur') + ',"*' + n + '*")', '=IFERROR(B' + r + '/$B$3,0)']);
   });
-  p.getRange(r4 + 1, 1, navRows.length, 3).setFormulas(navRows);
+  ecrireTableau_(p, r4 + 1, 1, navRows);
   p.getRange(r4 + 1, 3, navRows.length, 1).setNumberFormat('0.0%');
 
   p.setColumnWidth(1, 330); p.setColumnWidth(2, 110); p.setColumnWidth(3, 220); p.setColumnWidth(4, 300);
