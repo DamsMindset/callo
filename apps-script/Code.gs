@@ -541,6 +541,34 @@ function setup_() {
 }
 
 /**
+ * Séparateur d'arguments des formules, selon la locale de la feuille.
+ * En locale française (et la plupart des locales européennes), c'est « ; ».
+ * Écrire une formule avec des virgules dans une feuille fr_FR donne #ERROR!.
+ */
+var SEP_CACHE = null;
+function separateur_() {
+  if (SEP_CACHE) return SEP_CACHE;
+  var loc = 'en_US';
+  try { loc = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetLocale() || 'en_US'; } catch (e) {}
+  SEP_CACHE = /^(fr|de|es|it|pt|nl|be|pl|ru|tr|cs|sk|hu|ro|bg|hr|lt|lv|et|sl|fi|sv|da|no|el|uk|ca)/i.test(loc) ? ';' : ',';
+  log_('INFO', '', 'Locale feuille : ' + loc + ' — séparateur de formules : ' + SEP_CACHE);
+  return SEP_CACHE;
+}
+
+/** Remplace les virgules par le séparateur local, sans toucher au texte entre guillemets. */
+function formuleLocale_(f) {
+  var sep = separateur_();
+  if (sep === ',') return f;
+  var out = '', dansTexte = false;
+  for (var i = 0; i < f.length; i++) {
+    var c = f.charAt(i);
+    if (c === '"') { dansTexte = !dansTexte; out += c; continue; }
+    out += (c === ',' && !dansTexte) ? sep : c;
+  }
+  return out;
+}
+
+/**
  * Écrit un tableau en distinguant les textes des formules.
  * setFormulas() interpretait TOUT comme une formule : les libellés
  * ("Indicateur", "1 · E-mail envoyé") ressortaient en #NAME? / #ERROR!.
@@ -556,7 +584,7 @@ function ecrireTableau_(sh, ligne, colonne, lignes) {
     for (var j = 0; j < lignes[i].length; j++) {
       var c = lignes[i][j];
       if (typeof c === 'string' && c.charAt(0) === '=') {
-        sh.getRange(ligne + i, colonne + j).setFormula(c);
+        sh.getRange(ligne + i, colonne + j).setFormula(formuleLocale_(c));
       }
     }
   }
